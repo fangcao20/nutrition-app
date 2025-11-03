@@ -1,0 +1,14 @@
+{
+  "appId": "com.nutrition-app.app",
+  "productName": "Nutrition App",
+  "mac": {
+    "target": "dmg"
+  },
+  "win": {
+    "target": ["portable", "msi"]
+  },
+  "linux": {
+    "target": "AppImage",
+    "category": "Utility"
+  }
+}
