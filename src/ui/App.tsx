@@ -1,31 +1,42 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import './App.css'
+import { useState } from 'react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
+import SettingsPage from './pages/SettingsPage';
+import UsagePage from './pages/UsagePage';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [activeTab, setActiveTab] = useState<string>('settings');
 
   return (
-    <>
-      <div>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto py-6">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-foreground">
+            Nutrition App
+          </h1>
+          <p className="text-muted-foreground">
+            Quản lý dinh dưỡng thực phẩm
+          </p>
+        </div>
+
+        {/* Main Content */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-6">
+            <TabsTrigger value="settings">Cài đặt</TabsTrigger>
+            <TabsTrigger value="usage">Sử dụng</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="settings">
+            <SettingsPage />
+          </TabsContent>
+
+          <TabsContent value="usage">
+            <UsagePage />
+          </TabsContent>
+        </Tabs>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+export default App;
