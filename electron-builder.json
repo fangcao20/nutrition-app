@@ -1,5 +1,11 @@
 {
   "appId": "com.nutrition-app.app",
+  "files": [
+    "dist-electron",
+    "dist-react",
+    "src/electron/database/migrations/**/*.sql"
+  ],
+  "extraResources": ["dist-electron/preload.cjs"],
   "productName": "Nutrition App",
   "mac": {
     "target": "dmg"

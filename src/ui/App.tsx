@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import SettingsPage from './pages/SettingsPage';
 import UsagePage from './pages/UsagePage';
+import CategoriesPage from './pages/CategoriesPage';
+import HistoryPage from './pages/HistoryPage';
 
 function App() {
   const [activeTab, setActiveTab] = useState<string>('settings');
@@ -12,26 +14,33 @@ function App() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-foreground">
-            Nutrition App
+            Nutrition
           </h1>
-          <p className="text-muted-foreground">
-            Quản lý dinh dưỡng thực phẩm
-          </p>
         </div>
 
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
             <TabsTrigger value="settings">Cài đặt</TabsTrigger>
+            <TabsTrigger value="categories">Danh mục</TabsTrigger>
             <TabsTrigger value="usage">Sử dụng</TabsTrigger>
+            <TabsTrigger value="history">Lịch sử</TabsTrigger>
           </TabsList>
 
           <TabsContent value="settings">
             <SettingsPage />
           </TabsContent>
 
+          <TabsContent value="categories">
+            <CategoriesPage />
+          </TabsContent>
+
           <TabsContent value="usage">
             <UsagePage />
+          </TabsContent>
+
+          <TabsContent value="history">
+            <HistoryPage />
           </TabsContent>
         </Tabs>
       </div>

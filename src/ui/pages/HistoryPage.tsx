@@ -1,17 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import UsageManagementTable from '../components/UsageManagementTable';
+import HistoryManagementTable from '../components/HistoryManagementTable';
 
-export default function UsagePage() {
+const HistoryPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Tính toán sử dụng</CardTitle>
+          <CardTitle>Lịch sử sử dụng</CardTitle>
         </CardHeader>
         <CardContent>
-          <UsageManagementTable />
+          <HistoryManagementTable />
         </CardContent>
       </Card>
     </div>
   );
-}
+};
+
+export default HistoryPage;

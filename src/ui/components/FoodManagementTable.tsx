@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,111 +11,33 @@ import {
   type ColumnFiltersState,
   type Column,
 } from '@tanstack/react-table';
-import type { Food, FoodAllocation } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Edit, Trash2, ArrowUpDown, ChevronDown, Check, X, Search, Plus, Download, Upload } from 'lucide-react';
+import { Edit, ArrowUpDown, ChevronDown, Check, X, Search, Upload, Power } from 'lucide-react';
 import { formatNumber } from '../lib/utils';
 import FoodLossEditorModal from './EditFoodModal';
-import AddFoodModal from './AddFoodModal';
+import type { FoodWithCategories } from '../../../types/food';
 
-// Mock data
-const mockFoods: Food[] = [
-  {
-    id: 'K01',
-    origin_name: 'Chợ rẫy',
-    name: 'TP1',
-    unit: 'Chai',
-    calorie_per_unit: 17500,
-    calorie_usage: 7200,
-    base_quantity: 10,
-    hh_1_1_ratio: '1,000',
-    hh_1_1_patient: 'BN1',
-    hh_2_1_ratio: null,
-    hh_2_1_patient: null,
-    hh_2_2_ratio: null,
-    hh_2_2_patient: null,
-    hh_2_3_ratio: null,
-    hh_2_3_patient: null,
-    hh_3_1_ratio: '4,000',
-    hh_3_1_patient: 'BN1',
-    loss_ratio: '2,200',
-    destination_id: 'dest1',
-    destination_name: 'Xuất 1',
-    insurance_type_id: 'ins1',
-    insurance_type_name: 'Bảo hiểm',
-    origin_id: 'origin1',
-    apply_date: null,
-    active: true,
-    created_at: Date.now(),
-    updated_at: Date.now(),
-  },
-  {
-    id: 'K02',
-    origin_name: 'YD1',
-    name: 'TP2',
-    unit: 'Gram',
-    calorie_per_unit: 4070,
-    calorie_usage: '21.4%',
-    base_quantity: 100,
-    hh_1_1_ratio: null,
-    hh_1_1_patient: null,
-    hh_2_1_ratio: null,
-    hh_2_1_patient: null,
-    hh_2_2_ratio: null,
-    hh_2_2_patient: null,
-    hh_2_3_ratio: null,
-    hh_2_3_patient: null,
-    hh_3_1_ratio: '15%',
-    hh_3_1_patient: 'BN2',
-    loss_ratio: '6%',
-    destination_id: 'dest1',
-    destination_name: 'Xuất 1',
-    insurance_type_id: 'ins1',
-    insurance_type_name: 'Bảo hiểm',
-    origin_id: 'origin2',
-    apply_date: null,
-    active: true,
-    created_at: Date.now(),
-    updated_at: Date.now(),
-  },
-  {
-    id: 'K03',
-    origin_name: 'An bình',
-    name: 'TP3',
-    unit: 'Gram',
-    calorie_per_unit: 4100,
-    calorie_usage: '18.3%',
-    base_quantity: 10,
-    hh_1_1_ratio: null,
-    hh_1_1_patient: null,
-    hh_2_1_ratio: '2.0%',
-    hh_2_1_patient: 'BN2',
-    hh_2_2_ratio: '2.0%',
-    hh_2_2_patient: 'BN2',
-    hh_2_3_ratio: '2.0%',
-    hh_2_3_patient: 'BN2',
-    hh_3_1_ratio: '10.0%',
-    hh_3_1_patient: 'BN3',
-    loss_ratio: '2.3%',
-    destination_id: 'dest3',
-    destination_name: 'Xuất 3',
-    insurance_type_id: 'ins1',
-    insurance_type_name: 'Bảo hiểm',
-    origin_id: 'origin3',
-    apply_date: null,
-    active: true,
-    created_at: Date.now(),
-    updated_at: Date.now(),
-  },
-];
+// Format ratio values: if < 1 show as percentage with 2 decimal places
+const formatRatio = (value: string | null | undefined): string => {
+  if (!value || value === '') return '';
+  
+  const numValue = parseFloat(value);
+  if (isNaN(numValue)) return value;
+  
+  if (numValue < 1) {
+    return `${(numValue * 100).toFixed(2)}%`;
+  }
+  
+  return formatNumber(numValue);
+};
 
 // Dropdown Filter cho cột có giá trị/null
 function NullableDropdownFilter({ 
   column, 
 }: { 
-  column: Column<Food, unknown>; 
-  data: Food[];
+  column: Column<FoodWithCategories, unknown>; 
+  data: FoodWithCategories[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -220,9 +142,9 @@ function DropdownFilter({
   column, 
   data 
 }: { 
-  column: Column<Food, unknown>; 
+  column: Column<FoodWithCategories, unknown>; 
   title: string;
-  data: Food[];
+  data: FoodWithCategories[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -234,16 +156,16 @@ function DropdownFilter({
   // Lấy tất cả giá trị unique của cột
   const uniqueValues = useMemo(() => {
     const values = data.map(row => {
-      const value = row[columnId as keyof Food];
+      const value = row[columnId as keyof FoodWithCategories];
       // Xử lý đặc biệt cho boolean (trạng thái)
       if (columnId === 'active') {
         return value ? 'Hoạt động' : 'Ngừng';
       }
       // Xử lý cho các cột number cần format
-      if (columnId === 'calorie_per_unit' && typeof value === 'number') {
+      if (columnId === 'caloriePerUnit' && typeof value === 'number') {
         return formatNumber(value);
       }
-      if (columnId === 'calorie_usage' && typeof value === 'number') {
+      if (columnId === 'calorieUsage' && typeof value === 'number') {
         return formatNumber(value);
       }
       return value ? String(value) : '';
@@ -366,60 +288,150 @@ function DropdownFilter({
 }
 
 export default function FoodManagementTable() {
-  const [data, setData] = useState<Food[]>(mockFoods);
+  const [data, setData] = useState<FoodWithCategories[]>([]);
+  const [loading, setLoading] = useState(true);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+  const [selectedFood, setSelectedFood] = useState<FoodWithCategories | null>(null);
   const [isLossModalOpen, setIsLossModalOpen] = useState(false);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const handleEditFood = (food: Food) => {
+  const loadFoods = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Check if electronAPI is available
+      if (!window.electronAPI) {
+        console.error('ElectronAPI not available');
+        setData([]); // No fallback data
+        return;
+      }
+      
+      const foods = await window.electronAPI.food.getAll();
+      setData(foods || []);
+    } catch (error) {
+      console.error('Error loading foods:', error);
+      setData([]);
+      alert('Lỗi khi tải dữ liệu thực phẩm');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load data on component mount
+  useEffect(() => {
+    loadFoods();
+  }, [loadFoods]);
+
+  const handleEditFood = (food: FoodWithCategories) => {
     setSelectedFood(food);
     setIsLossModalOpen(true);
   };
 
-  const handleAddFood = () => {
-    setIsAddModalOpen(true);
-  };
+  // Temporarily commented out
+  // const handleAddFood = () => {
+  //   setIsAddModalOpen(true);
+  // };
 
-  const handleSaveAllocations = (foodId: string, allocations: FoodAllocation[], updatedFood?: Partial<Food>) => {
-    console.log('Save allocations for', foodId, allocations);
-    
-    // Update food data if provided
-    if (updatedFood) {
-      setData(prevData => 
-        prevData.map(food => 
-          food.id === foodId 
-            ? { ...food, ...updatedFood, updated_at: Date.now() }
-            : food
-        )
-      );
+  const handleDeactivateFood = useCallback(async (food: FoodWithCategories) => {
+    if (!window.electronAPI) {
+      alert('ElectronAPI not available');
+      return;
     }
+
+    const confirmMessage = food.active 
+      ? `Bạn có chắc chắn muốn ngừng hoạt động thực phẩm "${food.foodName}" (${food.foodId})?`
+      : `Bạn có chắc chắn muốn kích hoạt lại thực phẩm "${food.foodName}" (${food.foodId})?`;
     
-    // TODO: Save allocations to backend when integrated
+    if (confirm(confirmMessage)) {
+      try {
+        setLoading(true);
+        const success = await window.electronAPI.food.updateStatus(food.id, !food.active);
+        
+        if (success) {
+          // Reload data after update
+          await loadFoods();
+          
+          const successMessage = food.active 
+            ? 'Thực phẩm đã được ngừng hoạt động'
+            : 'Thực phẩm đã được kích hoạt lại';
+          alert(successMessage);
+        } else {
+          alert('Không thể cập nhật trạng thái thực phẩm');
+        }
+      } catch (error) {
+        console.error('Error updating food status:', error);
+        alert('Lỗi khi cập nhật trạng thái thực phẩm');
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, [loadFoods]);
+
+  const handleSaveFood = useCallback(async (updatedFood: Partial<FoodWithCategories>) => {
+    if (!selectedFood || !window.electronAPI) {
+      alert('ElectronAPI not available or no food selected');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const success = await window.electronAPI.food.update(selectedFood.id, updatedFood);
+      
+      if (success) {
+        // Reload data after update
+        await loadFoods();
+        alert('Cập nhật thực phẩm thành công');
+      } else {
+        alert('Không thể cập nhật thực phẩm');
+      }
+    } catch (error) {
+      console.error('Error updating food:', error);
+      alert('Lỗi khi cập nhật thực phẩm');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedFood, loadFoods]);
+
+  const handleImportExcel = async () => {
+    try {
+      setLoading(true);
+      const result = await window.electronAPI.dialog.showOpenDialog({
+        title: 'Chọn file Excel để import',
+        filters: [
+          { name: 'Excel Files', extensions: ['xlsx', 'xls'] },
+          { name: 'All Files', extensions: ['*'] }
+        ],
+        properties: ['openFile']
+      });
+
+      if (!result.canceled && result.filePaths.length > 0) {
+        const filePath = result.filePaths[0];
+        const importResult = await window.electronAPI.food.importFromExcel(filePath);
+        
+        if (importResult.success) {
+          alert(`Import thành công! Đã import ${importResult.imported} dòng dữ liệu.`);
+          // Reload data
+          await loadFoods();
+        } else {
+          let errorMessage = 'Import thất bại:\n';
+          importResult.errors.forEach(error => {
+            errorMessage += `Dòng ${error.row}: ${error.error}\n`;
+          });
+          alert(errorMessage);
+        }
+      }
+    } catch (error) {
+      console.error('Error importing Excel:', error);
+      alert(`Lỗi import: ${error}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSaveNewFood = (newFood: Omit<Food, 'id' | 'created_at' | 'updated_at'>) => {
-    // Generate new ID
-    const newId = `K${String(data.length + 1).padStart(2, '0')}`;
-    
-    const food: Food = {
-      ...newFood,
-      id: newId,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    };
-
-    setData(prev => [...prev, food]);
-    console.log('Added new food:', food);
-    // TODO: Save to backend when integrated
-  };
-
-  const columns = useMemo<ColumnDef<Food>[]>(
+  const columns = useMemo<ColumnDef<FoodWithCategories>[]>(
     () => [
       {
-        accessorKey: 'id',
+        accessorKey: 'foodId',
         header: ({ column }) => (
           <div className="flex items-center justify-between">
             <Button
@@ -434,7 +446,7 @@ export default function FoodManagementTable() {
             <DropdownFilter column={column} title="Mã số" data={data} />
           </div>
         ),
-        cell: ({ row }) => <div className="font-medium px-3 h-full flex items-center">{row.getValue('id')}</div>,
+        cell: ({ row }) => <div className="font-medium px-3 h-full flex items-center">{row.getValue('foodId')}</div>,
         size: 100,
         filterFn: (row, id, value: string[]) => {
           if (!value || value.length === 0) return false;
@@ -442,14 +454,14 @@ export default function FoodManagementTable() {
         },
       },
       {
-        accessorKey: 'origin_name',
+        accessorKey: 'originName',
         header: ({ column }) => (
           <div className="flex items-center justify-between px-3 py-2">
             <div className="text-xs font-medium">Nơi lấy mẫu</div>
             <DropdownFilter column={column} title="Nơi lấy mẫu" data={data} />
           </div>
         ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('origin_name') || '-'}</div>,
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('originName') || '-'}</div>,
         size: 130,
         filterFn: (row, id, value: string[]) => {
           if (!value || value.length === 0) return false;
@@ -458,7 +470,7 @@ export default function FoodManagementTable() {
         },
       },
       {
-        accessorKey: 'name',
+        accessorKey: 'foodName',
         header: ({ column }) => (
           <div className="flex items-center justify-between">
             <Button
@@ -473,7 +485,7 @@ export default function FoodManagementTable() {
             <DropdownFilter column={column} title="Thực phẩm" data={data} />
           </div>
         ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('name')}</div>,
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('foodName')}</div>,
         size: 120,
         filterFn: (row, id, value: string[]) => {
           if (!value || value.length === 0) return false;
@@ -496,25 +508,25 @@ export default function FoodManagementTable() {
         },
       },
       {
-        accessorKey: 'calorie_per_unit',
+        accessorKey: 'caloriePerUnit',
         header: () => (
           <div className="px-3 py-2 text-xs font-medium">Giá trị</div>
         ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end">{formatNumber(row.getValue('calorie_per_unit'))}</div>,
+        cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end">{formatNumber(row.getValue('caloriePerUnit'))}</div>,
         size: 100,
       },
       {
-        accessorKey: 'calorie_usage',
+        accessorKey: 'calorieUsage',
         header: () => (
           <div className="px-3 py-2 text-xs font-medium bg-pink-100">Calo sử dụng</div>
         ),
         cell: ({ row }) => {
-          const value = row.getValue('calorie_usage') as number | string | null;
+          const value = row.getValue('calorieUsage') as number | string | null;
           let display: string;
           if (typeof value === 'number') {
-            display = formatNumber(value);
+            display = formatRatio(String(value));
           } else if (value) {
-            display = String(value);
+            display = formatRatio(String(value));
           } else {
             display = '-';
           }
@@ -528,14 +540,14 @@ export default function FoodManagementTable() {
         header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 1.1</div>,
         columns: [
           {
-            accessorKey: 'hh_1_1_ratio',
+            accessorKey: 'hh11Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
                 <div className="text-xs font-medium">Tỉ lệ</div>
                 <NullableDropdownFilter column={column} data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{row.getValue('hh_1_1_ratio') || ''}</div>,
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh11Ratio'))}</div>,
             size: 90,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -547,14 +559,14 @@ export default function FoodManagementTable() {
             },
           },
           {
-            accessorKey: 'hh_1_1_patient',
+            accessorKey: 'hh11Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
                 <div className="text-xs font-medium">BN</div>
                 <DropdownFilter column={column} title="Bệnh nhân" data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh_1_1_patient') || ''}</div>,
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh11Patient') || ''}</div>,
             size: 110,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -570,14 +582,14 @@ export default function FoodManagementTable() {
         header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-green-100">HH 2.1</div>,
         columns: [
           {
-            accessorKey: 'hh_2_1_ratio',
+            accessorKey: 'hh21Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
                 <div className="text-xs font-medium">Tỉ lệ</div>
                 <NullableDropdownFilter column={column} data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{row.getValue('hh_2_1_ratio') || ''}</div>,
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh21Ratio'))}</div>,
             size: 90,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -589,14 +601,14 @@ export default function FoodManagementTable() {
             },
           },
           {
-            accessorKey: 'hh_2_1_patient',
+            accessorKey: 'hh21Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
                 <div className="text-xs font-medium">BN</div>
                 <DropdownFilter column={column} title="Bệnh nhân" data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh_2_1_patient') || ''}</div>,
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh21Patient') || ''}</div>,
             size: 110,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -612,14 +624,14 @@ export default function FoodManagementTable() {
         header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 2.2</div>,
         columns: [
           {
-            accessorKey: 'hh_2_2_ratio',
+            accessorKey: 'hh22Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
                 <div className="text-xs font-medium">Tỉ lệ</div>
                 <NullableDropdownFilter column={column} data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{row.getValue('hh_2_2_ratio') || ''}</div>,
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh22Ratio'))}</div>,
             size: 90,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -631,14 +643,14 @@ export default function FoodManagementTable() {
             },
           },
           {
-            accessorKey: 'hh_2_2_patient',
+            accessorKey: 'hh22Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
                 <div className="text-xs font-medium">BN</div>
                 <DropdownFilter column={column} title="Bệnh nhân" data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh_2_2_patient') || ''}</div>,
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh22Patient') || ''}</div>,
             size: 110,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -654,14 +666,14 @@ export default function FoodManagementTable() {
         header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-green-100">HH 2.3</div>,
         columns: [
           {
-            accessorKey: 'hh_2_3_ratio',
+            accessorKey: 'hh23Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
                 <div className="text-xs font-medium">Tỉ lệ</div>
                 <NullableDropdownFilter column={column} data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{row.getValue('hh_2_3_ratio') || ''}</div>,
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh23Ratio'))}</div>,
             size: 90,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -673,14 +685,14 @@ export default function FoodManagementTable() {
             },
           },
           {
-            accessorKey: 'hh_2_3_patient',
+            accessorKey: 'hh23Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
                 <div className="text-xs font-medium">BN</div>
                 <DropdownFilter column={column} title="Bệnh nhân" data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh_2_3_patient') || ''}</div>,
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh23Patient') || ''}</div>,
             size: 110,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -696,14 +708,14 @@ export default function FoodManagementTable() {
         header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 3.1</div>,
         columns: [
           {
-            accessorKey: 'hh_3_1_ratio',
+            accessorKey: 'hh31Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
                 <div className="text-xs font-medium">Tỉ lệ</div>
                 <NullableDropdownFilter column={column} data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{row.getValue('hh_3_1_ratio') || ''}</div>,
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh31Ratio'))}</div>,
             size: 90,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -715,14 +727,14 @@ export default function FoodManagementTable() {
             },
           },
           {
-            accessorKey: 'hh_3_1_patient',
+            accessorKey: 'hh31Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
                 <div className="text-xs font-medium">BN</div>
                 <DropdownFilter column={column} title="Bệnh nhân" data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh_3_1_patient') || ''}</div>,
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh31Patient') || ''}</div>,
             size: 110,
             filterFn: (row, id, value: string[]) => {
               if (!value || value.length === 0) return false;
@@ -734,22 +746,22 @@ export default function FoodManagementTable() {
       },
       // TL lỗ và các cột còn lại
       {
-        accessorKey: 'loss_ratio',
+        accessorKey: 'lossRatio',
         header: () => (
           <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>
         ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end bg-pink-50">{row.getValue('loss_ratio') || '-'}</div>,
+        cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end bg-pink-50">{formatRatio(row.getValue('lossRatio')) || '-'}</div>,
         size: 100,
       },
       {
-        accessorKey: 'destination_name',
+        accessorKey: 'destinationName',
         header: ({ column }) => (
           <div className="flex items-center justify-between px-3 py-2">
             <div className="text-xs font-medium">Nơi xuất</div>
             <DropdownFilter column={column} title="Nơi xuất" data={data} />
           </div>
         ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('destination_name') || '-'}</div>,
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('destinationName') || '-'}</div>,
         size: 110,
         filterFn: (row, id, value: string[]) => {
           if (!value || value.length === 0) return false;
@@ -758,14 +770,14 @@ export default function FoodManagementTable() {
         },
       },
       {
-        accessorKey: 'insurance_type_name',
+        accessorKey: 'insuranceTypeName',
         header: ({ column }) => (
           <div className="flex items-center justify-between px-3 py-2">
             <div className="text-xs font-medium">Loại hình</div>
             <DropdownFilter column={column} title="Loại hình" data={data} />
           </div>
         ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('insurance_type_name') || '-'}</div>,
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('insuranceTypeName') || '-'}</div>,
         size: 110,
         filterFn: (row, id, value: string[]) => {
           if (!value || value.length === 0) return false;
@@ -774,14 +786,14 @@ export default function FoodManagementTable() {
         },
       },
       {
-        accessorKey: 'apply_date',
+        accessorKey: 'applyDate',
         header: ({ column }) => (
           <div className="flex items-center justify-between px-3 py-2">
             <div className="text-xs font-medium">Ngày áp dụng</div>
             <DropdownFilter column={column} title="Ngày áp dụng" data={data} />
           </div>
         ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('apply_date') || '-'}</div>,
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('applyDate') || '-'}</div>,
         size: 130,
         filterFn: (row, id, value: string[]) => {
           if (!value || value.length === 0) return false;
@@ -827,22 +839,30 @@ export default function FoodManagementTable() {
               variant="ghost"
               size="icon"
               onClick={() => handleEditFood(row.original)}
+              title="Chỉnh sửa"
             >
               <Edit className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => console.log('Delete', row.original)}
+              onClick={() => handleDeactivateFood(row.original)}
+              title={row.original.active ? 'Ngừng hoạt động' : 'Kích hoạt lại'}
             >
-              <Trash2 className="h-4 w-4 text-destructive" />
+                {row.original.active ? (
+                  // Show the same Power icon for 'Ngừng hoạt động' but in red
+                  <Power className="h-4 w-4 text-red-600" />
+                ) : (
+                  // Show Power icon in green for 'Kích hoạt lại'
+                  <Power className="h-4 w-4 text-green-600" />
+                )}
             </Button>
           </div>
         ),
         size: 120,
       },
     ],
-    [data]
+    [data, handleDeactivateFood]
   );
 
   const table = useReactTable({
@@ -893,18 +913,15 @@ export default function FoodManagementTable() {
         </div>
         
         <div className="flex gap-2">
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={handleImportExcel} disabled={loading}>
             <Upload className="w-4 h-4" />
-            Import Excel
+            {loading ? 'Đang import...' : 'Import Excel'}
           </Button>
-          <Button size="sm" variant="outline">
-            <Download className="w-4 h-4" />
-            Export Excel
-          </Button>
-          <Button size="sm" onClick={handleAddFood}>
+          {/* Temporarily hidden */}
+          {/* <Button size="sm" onClick={handleAddFood}>
             <Plus className="w-4 h-4" />
             Thêm mới
-          </Button>
+          </Button> */}
         </div>
       </div>
 
@@ -1010,14 +1027,7 @@ export default function FoodManagementTable() {
         food={selectedFood}
         open={isLossModalOpen}
         onOpenChange={setIsLossModalOpen}
-        onSave={handleSaveAllocations}
-      />
-
-      {/* Add Food Modal */}
-      <AddFoodModal
-        open={isAddModalOpen}
-        onOpenChange={setIsAddModalOpen}
-        onSave={handleSaveNewFood}
+        onSave={handleSaveFood}
       />
     </div>
   );

@@ -4,6 +4,9 @@
     "target": "ESNext",
     "module": "NodeNext",
     "skipLibCheck": true,
-    "outDir": "../../dist-electron"
+    "outDir": "../../dist-electron",
+    "typeRoots": ["../../node_modules/@types", "../../types"],
+    "types": ["node"]
   },
+  "include": ["./**/*", "../../types/**/*"]
 }
