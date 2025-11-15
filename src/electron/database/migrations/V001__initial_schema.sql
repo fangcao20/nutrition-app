@@ -57,7 +57,7 @@ CREATE TABLE insurance_types (
 -- Bảng chính: Thông số thực phẩm và hao hụt
 CREATE TABLE foods (
   id INTEGER PRIMARY KEY AUTOINCREMENT, -- Auto-increment primary key
-  food_id TEXT UNIQUE,              -- Mã số từ Excel (K01, K02, K03...)
+  food_id TEXT,              -- Mã số từ Excel (K01, K02, K03...)
   origin_id INTEGER,                -- FK → origins
   food_name_id INTEGER,             -- FK → food_names
   unit_id INTEGER,                  -- FK → units
