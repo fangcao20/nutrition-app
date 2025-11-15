@@ -105,16 +105,27 @@ export interface FoodSearchOptions {
   offset?: number;
 }
 
+export interface ImportError {
+  row: number;
+  error: string;
+  foodId?: string;
+  originName?: string;
+  foodName?: string;
+  unit?: string;
+  caloriePerUnit?: string;
+}
+
 type FoodEventPayloadMapping = {
   "food:getAll": FoodWithCategories[];
   "food:getById": FoodWithCategories;
   "food:importFromExcel": {
     success: boolean;
     imported: number;
-    errors: Array<{ row: number; error: string }>;
+    errors: ImportError[];
   };
   "food:updateStatus": boolean;
   "food:update": boolean;
+  "food:exportImportErrors": boolean;
 };
 
 interface FoodAPI {
@@ -122,8 +133,9 @@ interface FoodAPI {
   importFromExcel: (filePath: string) => Promise<{
     success: boolean;
     imported: number;
-    errors: Array<{ row: number; error: string }>;
+    errors: ImportError[];
   }>;
   updateStatus: (id: number, active: boolean) => Promise<boolean>;
   update: (id: number, data: Partial<FoodWithCategories>) => Promise<boolean>;
+  exportImportErrors: (filePath: string, data: any[]) => Promise<boolean>;
 }

@@ -32,9 +32,25 @@ export class FoodService {
   async importFromExcel(filePath: string): Promise<{
     success: boolean;
     imported: number;
-    errors: Array<{ row: number; error: string }>;
+    errors: Array<{
+      row: number;
+      error: string;
+      foodId?: string;
+      originName?: string;
+      foodName?: string;
+      unit?: string;
+      caloriePerUnit?: string;
+    }>;
   }> {
-    const errors: Array<{ row: number; error: string }> = [];
+    const errors: Array<{
+      row: number;
+      error: string;
+      foodId?: string;
+      originName?: string;
+      foodName?: string;
+      unit?: string;
+      caloriePerUnit?: string;
+    }> = [];
     let imported = 0;
 
     try {
@@ -55,7 +71,9 @@ export class FoodService {
       }) as unknown[][];
 
       if (data.length < 3) {
-        throw new Error("File Excel trống hoặc không có dữ liệu");
+        throw new Error(
+          "File Excel cần có ít nhất 3 dòng (2 dòng tiêu đề + 1 dòng dữ liệu). Vui lòng kiểm tra định dạng file."
+        );
       }
 
       // Skip 2 header rows, process from row 3
@@ -76,10 +94,34 @@ export class FoodService {
             imported++;
           }
         } catch (error) {
+          // Try to parse some basic data for error reporting
+          let foodId = "";
+          let originName = "";
+          let foodName = "";
+          let unit = "";
+          let caloriePerUnit = "";
+
+          try {
+            foodId = this.getCellValue(row[0]) || "";
+            originName = this.getCellValue(row[1]) || "";
+            foodName = this.getCellValue(row[2]) || "";
+            unit = this.getCellValue(row[3]) || "";
+            caloriePerUnit = this.getCellValue(row[4]) || "";
+          } catch {
+            // Ignore parse errors for error data
+          }
+
           errors.push({
             row: rowNum,
             error:
-              error instanceof Error ? error.message : "Lỗi không xác định",
+              error instanceof Error
+                ? this.getUserFriendlyErrorMessage(error)
+                : "Lỗi không xác định",
+            foodId,
+            originName,
+            foodName,
+            unit,
+            caloriePerUnit,
           });
         }
       }
@@ -97,7 +139,14 @@ export class FoodService {
           {
             row: 0,
             error:
-              error instanceof Error ? error.message : "Lỗi đọc file Excel",
+              error instanceof Error
+                ? this.getUserFriendlyErrorMessage(error)
+                : "Lỗi đọc file Excel",
+            foodId: "",
+            originName: "",
+            foodName: "",
+            unit: "",
+            caloriePerUnit: "",
           },
         ],
       };
@@ -183,6 +232,115 @@ export class FoodService {
     return !["false", "0", "no", "inactive", "ngưng"].includes(value);
   }
 
+  // Convert technical error messages to user-friendly messages
+  private getUserFriendlyErrorMessage(error: Error): string {
+    const errorMessage = error.message;
+
+    // UNIQUE constraint errors
+    if (errorMessage.includes("UNIQUE constraint failed")) {
+      return `Thông tin thực phẩm này đã tồn tại trong hệ thống.`;
+    }
+
+    // Validation errors (provide column hints)
+    if (errorMessage.includes("Thiếu mã số thực phẩm")) {
+      return 'Cột "Mã số" (cột A) không được để trống. Vui lòng nhập mã thực phẩm.';
+    }
+    if (errorMessage.includes("Thiếu tên thực phẩm")) {
+      return 'Cột "Thực phẩm" (cột C) không được để trống. Vui lòng nhập tên thực phẩm.';
+    }
+    if (errorMessage.includes("Thiếu đơn vị tính")) {
+      return 'Cột "Đơn vị tính" (cột D) không được để trống. Vui lòng nhập đơn vị (kg, g, ml, ...)';
+    }
+    if (errorMessage.includes("Giá trị calorie không hợp lệ")) {
+      return 'Cột "Giá trị" (cột E) phải là số hợp lệ. Vui lòng nhập số calorie/đơn vị.';
+    }
+
+    // Database constraint errors
+    if (errorMessage.includes("FOREIGN KEY constraint")) {
+      return "Dữ liệu tham chiếu không hợp lệ. Kiểm tra lại danh mục liên quan.";
+    }
+    if (errorMessage.includes("CHECK constraint")) {
+      return "Dữ liệu không đáp ứng điều kiện. Kiểm tra lại giá trị nhập vào.";
+    }
+    if (errorMessage.includes("NOT NULL constraint")) {
+      return "Thiếu dữ liệu bắt buộc. Vui lòng điền đầy đủ thông tin.";
+    }
+
+    // File format errors
+    if (errorMessage.includes("File không đúng định dạng Excel")) {
+      return "File phải có định dạng Excel (.xlsx hoặc .xls). Vui lòng chọn file Excel hợp lệ.";
+    }
+    if (errorMessage.includes("File Excel cần có ít nhất 3 dòng")) {
+      return "File Excel phải có ít nhất 3 dòng (2 dòng tiêu đề + dữ liệu). Kiểm tra lại định dạng file.";
+    }
+
+    // File access errors
+    if (
+      errorMessage.includes("ENOENT") ||
+      errorMessage.includes("no such file")
+    ) {
+      return "Không tìm thấy file. File có thể đã bị di chuyển hoặc xóa.";
+    }
+    if (
+      errorMessage.includes("EACCES") ||
+      errorMessage.includes("permission denied")
+    ) {
+      return "Không có quyền truy cập file. Vui lòng kiểm tra quyền đọc file.";
+    }
+    if (
+      errorMessage.includes("file is locked") ||
+      errorMessage.includes("in use")
+    ) {
+      return "File đang được sử dụng bởi ứng dụng khác. Vui lòng đóng file Excel trước khi import.";
+    }
+
+    // Number parsing errors
+    if (
+      errorMessage.includes("Invalid number") ||
+      errorMessage.includes("NaN")
+    ) {
+      return "Giá trị số không hợp lệ. Vui lòng kiểm tra các ô chứa số (calorie, tỉ lệ hao hụt).";
+    }
+
+    // Date parsing errors
+    if (errorMessage.includes("Invalid date")) {
+      return "Định dạng ngày không hợp lệ. Vui lòng sử dụng định dạng dd/mm/yyyy.";
+    }
+
+    // Memory/size errors
+    if (
+      errorMessage.includes("out of memory") ||
+      errorMessage.includes("too large")
+    ) {
+      return "File quá lớn hoặc hết bộ nhớ. Vui lòng thử với file nhỏ hơn.";
+    }
+
+    // Default case - return original message with helpful context
+    if (errorMessage.length > 100) {
+      return `Lỗi xử lý dữ liệu: ${errorMessage.substring(0, 100)}...`;
+    }
+    return `Lỗi: ${errorMessage}`;
+  }
+
+  // Export import errors to Excel
+  async exportImportErrors(filePath: string, data: any[]): Promise<boolean> {
+    try {
+      // Create worksheet from data
+      const worksheet = XLSX.utils.json_to_sheet(data);
+
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Import Errors");
+
+      // Write file
+      XLSX.writeFile(workbook, filePath);
+
+      return true;
+    } catch (error) {
+      console.error("Error exporting import errors:", error);
+      return false;
+    }
+  }
   private async createFoodFromImport(data: CreateFoodRequest): Promise<void> {
     try {
       // Find or create category IDs - chỉ khi có dữ liệu

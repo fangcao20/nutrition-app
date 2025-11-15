@@ -29,5 +29,12 @@ export class FoodHandler {
         return await this.foodService.updateFood(id, data);
       }
     );
+
+    ipcHandle(
+      "food:exportImportErrors",
+      async (event, filePath: string, data: any[]) => {
+        return await this.foodService.exportImportErrors(filePath, data);
+      }
+    );
   }
 }

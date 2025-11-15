@@ -26,6 +26,8 @@ const foodAPI: FoodAPI = {
     ipcInvoke("food:updateStatus", id, active),
   update: (id: number, data: Partial<FoodWithCategories>) =>
     ipcInvoke("food:update", id, data),
+  exportImportErrors: (filePath: string, data: any[]) =>
+    ipcInvoke("food:exportImportErrors", filePath, data),
 };
 
 const categoryAPI = {
