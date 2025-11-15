@@ -9,6 +9,12 @@ export interface UsageInputData {
   value: number; // Giá trị (E)
   monthYear?: string; // Ngày tháng (F) - optional vì có thể không có
   quantity: number; // Số lượng (G)
+  totalCalories?: number; // Tổng Calo (H) - computed: quantity × value
+  hh31Patient?: string; // HH 3.1 (I) - from Excel
+  destinationName?: string; // Nơi xuất (J) - from Excel
+  // Validation fields
+  hasError?: boolean; // Whether this row has validation errors
+  errorMessage?: string; // Error message for this row
 }
 
 export interface UsageCalculationRequest {
@@ -31,6 +37,7 @@ export interface UsageCalculationRow {
   // Calculated data
   totalCalories: number; // Tổng calo = giá trị x số lượng
   usedCalories: number;
+  totalUsedCalories?: number; // Tổng calo sử dụng = nếu % thì x totalCalories, nếu số tuyệt đối thì x quantity
   // HH ratios and patient data
   hh11Ratio?: number | null;
   hh11Calories?: number | null;
@@ -51,6 +58,8 @@ export interface UsageCalculationRow {
   remainingCalories: number;
   destinationName?: string;
   insuranceTypeName?: string;
+  applyDate?: string;
+  active?: boolean;
 }
 
 export interface UsageNotFoundItem {
@@ -104,9 +113,7 @@ export interface UsageAPI {
     filePath: string
   ) => Promise<{ success: boolean; error?: string }>;
   saveUsageRecords: (request: SaveUsageRequest) => Promise<SaveUsageResponse>;
-  getUsageHistory: (
-    importMonthYear: string
-  ) => Promise<{
+  getUsageHistory: (importMonthYear: string) => Promise<{
     success: boolean;
     data: UsageCalculationRow[];
     error?: string;

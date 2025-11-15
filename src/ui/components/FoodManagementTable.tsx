@@ -13,7 +13,7 @@ import {
 } from '@tanstack/react-table';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Edit, ArrowUpDown, ChevronDown, Check, X, Search, Upload, Power, Download } from 'lucide-react';
+import { Edit, ArrowUpDown, ChevronDown, X, Search, Upload, Power, Download } from 'lucide-react';
 import { formatNumber } from '../lib/utils';
 import FoodLossEditorModal from './EditFoodModal';
 import type { FoodWithCategories, ImportError } from '../../../types/food';
@@ -89,36 +89,34 @@ function NullableDropdownFilter({
       
       {isOpen && (
         <div className="absolute top-full left-0 z-[9999] mt-1 w-52 bg-white border border-gray-200 rounded-md shadow-xl">
-          <div className="p-3 border-b border-gray-100">
-            <div className="space-y-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSelectAll}
-                className="w-full justify-start h-7 text-xs font-normal"
-              >
-                <Check className="h-3 w-3 mr-2" />
-                Chọn tất cả
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDeselectAll}
-                className="w-full justify-start h-7 text-xs font-normal"
-              >
-                <X className="h-3 w-3 mr-2" />
-                Bỏ chọn tất cả
-              </Button>
-            </div>
+          <div className="space-y-1 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSelectAll}
+              className="w-full justify-start h-6 text-xs"
+            >
+              Chọn tất cả ({options.length})
+            </Button>
+          </div>
+          <div className="space-y-1 pb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeselectAll}
+              className="w-full justify-start h-6 text-xs"
+            >
+              Bỏ chọn tất cả
+            </Button>
           </div>
           
-          <div className="max-h-48 overflow-y-auto border-b border-gray-100">
+          <div className="max-h-48 overflow-y-auto">
             {options.map((value) => {
               const isSelected = !filterValue || filterValue.includes(value);
               return (
                 <label
                   key={value}
-                  className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer text-xs border-b border-gray-50 last:border-b-0"
+                  className="flex items-center px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs"
                 >
                   <input
                     type="checkbox"
@@ -362,7 +360,18 @@ export default function FoodManagementTable() {
         }
       } catch (error) {
         console.error('Error updating food status:', error);
-        alert('Lỗi khi cập nhật trạng thái thực phẩm');
+        
+        // Check if error is due to UNIQUE constraint violation
+        const errorMessage = String(error);
+        if (errorMessage.includes('UNIQUE constraint') || errorMessage.includes('unique')) {
+          alert(
+            `❌ Không thể kích hoạt thực phẩm này!\n\n` +
+            `Đã có một thực phẩm tương tự (cùng mã số, nơi lấy mẫu, tên thực phẩm, đơn vị và giá trị calo) đang ở trạng thái hoạt động.\n\n` +
+            `Vui lòng ngừng hoạt động thực phẩm trùng lặp trước khi kích hoạt thực phẩm này.`
+          );
+        } else {
+          alert('Lỗi khi cập nhật trạng thái thực phẩm');
+        }
       } finally {
         setLoading(false);
       }
@@ -534,24 +543,31 @@ export default function FoodManagementTable() {
         cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end">{formatNumber(row.getValue('caloriePerUnit'))}</div>,
         size: 100,
       },
+      // Calo sử dụng Group
       {
-        accessorKey: 'calorieUsage',
-        header: () => (
-          <div className="px-3 py-2 text-xs font-medium bg-pink-100">Calo sử dụng</div>
-        ),
-        cell: ({ row }) => {
-          const value = row.getValue('calorieUsage') as number | string | null;
-          let display: string;
-          if (typeof value === 'number') {
-            display = formatRatio(String(value));
-          } else if (value) {
-            display = formatRatio(String(value));
-          } else {
-            display = '-';
-          }
-          return <div className="px-3 h-full flex items-center justify-end bg-pink-50">{display}</div>;
-        },
-        size: 120,
+        id: 'calorie_usage_group',
+        header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
+        columns: [
+          {
+            accessorKey: 'calorieUsage',
+            header: () => (
+              <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>
+            ),
+            cell: ({ row }) => {
+              const value = row.getValue('calorieUsage') as number | string | null;
+              let display: string;
+              if (typeof value === 'number') {
+                display = formatRatio(String(value));
+              } else if (value) {
+                display = formatRatio(String(value));
+              } else {
+                display = '-';
+              }
+              return <div className="px-3 h-full flex items-center justify-end bg-pink-50">{display}</div>;
+            },
+            size: 120,
+          },
+        ],
       },
       // HH 1.1 Group
       {
@@ -581,8 +597,8 @@ export default function FoodManagementTable() {
             accessorKey: 'hh11Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">BN</div>
-                <DropdownFilter column={column} title="Bệnh nhân" data={data} />
+                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh11Patient') || ''}</div>,
@@ -623,8 +639,8 @@ export default function FoodManagementTable() {
             accessorKey: 'hh21Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
-                <div className="text-xs font-medium">BN</div>
-                <DropdownFilter column={column} title="Bệnh nhân" data={data} />
+                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh21Patient') || ''}</div>,
@@ -665,8 +681,8 @@ export default function FoodManagementTable() {
             accessorKey: 'hh22Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">BN</div>
-                <DropdownFilter column={column} title="Bệnh nhân" data={data} />
+                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh22Patient') || ''}</div>,
@@ -707,8 +723,8 @@ export default function FoodManagementTable() {
             accessorKey: 'hh23Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
-                <div className="text-xs font-medium">BN</div>
-                <DropdownFilter column={column} title="Bệnh nhân" data={data} />
+                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh23Patient') || ''}</div>,
@@ -749,8 +765,8 @@ export default function FoodManagementTable() {
             accessorKey: 'hh31Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">BN</div>
-                <DropdownFilter column={column} title="Bệnh nhân" data={data} />
+                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh31Patient') || ''}</div>,

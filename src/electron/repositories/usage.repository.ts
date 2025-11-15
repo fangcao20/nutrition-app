@@ -186,6 +186,8 @@ class UsageRepository {
         remainingCalories,
         destinationName: foodData.destinationName,
         insuranceTypeName: foodData.insuranceTypeName,
+        applyDate: foodData.applyDate,
+        active: !!foodData.active,
         lossRatio:
           foodData.lossRatio && foodData.lossRatio.trim()
             ? parseFloat(foodData.lossRatio)

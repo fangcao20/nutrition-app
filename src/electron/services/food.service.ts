@@ -90,8 +90,8 @@ export class FoodService {
 
           if (foodData) {
             // Create food record
-            await this.createFoodFromImport(foodData);
-            imported++;
+              await this.createFoodFromImport(foodData);
+              imported++;
           }
         } catch (error) {
           // Try to parse some basic data for error reporting
@@ -156,10 +156,11 @@ export class FoodService {
   private mapExcelRowToFood(row: unknown[]): CreateFoodRequest | null {
     // Excel columns mapping based on the image:
     // A(0): Mã số, B(1): Nơi lấy mẫu, C(2): Thực phẩm, D(3): Đơn vị tính, E(4): Giá trị
-    // F(5): Calo sử dụng, G(6): HH1.1 Tỉ lệ, H(7): HH1.1 BN, I(8): HH2.1 Tỉ lệ, J(9): HH2.1 BN
-    // K(10): HH2.2 Tỉ lệ, L(11): HH2.2 BN, M(12): HH2.3 Tỉ lệ, N(13): HH2.3 BN
-    // O(14): HH3.1 Tỉ lệ, P(15): HH3.1 BN, Q(16): TL%, R(17): Nơi xuất, S(18): Loại hình
-    // T(19): Ngày áp dụng, U(20): Con số dương (active)
+    // F(5): Ngày tháng, G(6): Số lượng, H(7): Tổng Calo, I(8): HH1.1 Tỉ lệ, J(9): HH1.1 Tổng Calo sử dụng
+    // K(10): HH1.1 Tỉ lệ, L(11): HH1.1 Calo, M(12): HH1.1 Người lấy mẫu, N(13): HH2.1 Tỉ lệ, O(14): HH2.1 Calo
+    // P(15): HH2.1 Người lấy mẫu, Q(16): HH2.2 Tỉ lệ, R(17): HH2.2 Calo, S(18): HH2.2 Người lấy mẫu, T(19): HH2.3 Tỉ lệ
+    // U(20): HH2.3 Calo, V(21): HH2.3 Người lấy mẫu, W(22): HH3.1 Tỉ lệ, X(23): HH3.1 Calo, Y(24): HH3.1 Người lấy mẫu
+    // Z(25): TL%, AA(26): Calo còn lại, AB(27): Nơi xuất, AC(28): Loại hình, AD(29): Ngày áp dụng, AE(30): Con số dương
 
     const id = this.getCellValue(row[0]);
     const originName = this.getCellValue(row[1]);
@@ -187,22 +188,22 @@ export class FoodService {
       foodName: foodName,
       unit: unit,
       caloriePerUnit: caloriePerUnit,
-      calorieUsage: this.getCellValue(row[5]),
-      hh11Ratio: this.getCellValue(row[6]),
-      hh11Patient: this.getCellValue(row[7]),
-      hh21Ratio: this.getCellValue(row[8]),
-      hh21Patient: this.getCellValue(row[9]),
-      hh22Ratio: this.getCellValue(row[10]),
-      hh22Patient: this.getCellValue(row[11]),
-      hh23Ratio: this.getCellValue(row[12]),
-      hh23Patient: this.getCellValue(row[13]),
-      hh31Ratio: this.getCellValue(row[14]),
-      hh31Patient: this.getCellValue(row[15]),
-      lossRatio: this.getCellValue(row[16]),
-      destinationName: this.getCellValue(row[17]) || "",
-      insuranceTypeName: this.getCellValue(row[18]) || "",
-      applyDate: this.getCellValue(row[19]),
-      active: this.parseBoolean(row[20]),
+      calorieUsage: this.parseCalorieUsage(row[8]), // H - Tổng Calo
+      hh11Ratio: this.parseCalorieUsage(row[10]), // K - HH1.1 Tỉ lệ
+      hh11Patient: this.getCellValue(row[12]), // M - HH1.1 Người lấy mẫu
+      hh21Ratio: this.parseCalorieUsage(row[13]), // N - HH2.1 Tỉ lệ
+      hh21Patient: this.getCellValue(row[15]), // P - HH2.1 Người lấy mẫu
+      hh22Ratio: this.parseCalorieUsage(row[16]), // Q - HH2.2 Tỉ lệ
+      hh22Patient: this.getCellValue(row[18]), // S - HH2.2 Người lấy mẫu
+      hh23Ratio: this.parseCalorieUsage(row[19]), // T - HH2.3 Tỉ lệ
+      hh23Patient: this.getCellValue(row[21]), // V - HH2.3 Người lấy mẫu
+      hh31Ratio: this.parseCalorieUsage(row[22]), // W - HH3.1 Tỉ lệ
+      hh31Patient: this.getCellValue(row[24]), // Y - HH3.1 Người lấy mẫu
+      lossRatio: this.parseCalorieUsage(row[25]), // Z - TL%
+      destinationName: this.getCellValue(row[27]) || "", // AB - Nơi xuất
+      insuranceTypeName: this.getCellValue(row[28]) || "", // AC - Loại hình
+      applyDate: this.getCellValue(row[29]), // AD - Ngày áp dụng
+      active: this.parseBoolean(row[30]), // AE - Con số dương
     };
   }
 
@@ -221,6 +222,43 @@ export class FoodService {
 
     const num = Number(cell);
     return isNaN(num) ? null : num;
+  }
+
+  private parseCalorieUsage(cell: unknown): string | null {
+    if (cell === undefined || cell === null || cell === "") {
+      return null;
+    }
+
+    const value = String(cell).trim();
+    if (value === "") return null;
+
+    // Case 3: If it's a percentage string (contains %), convert to decimal
+    if (value.includes("%")) {
+      const percentValue = value.replace("%", "").trim();
+      const num = Number(percentValue);
+      if (!isNaN(num)) {
+        return (num / 100).toString(); // e.g., "23.5%" -> "0.235"
+      }
+      return value; // fallback to original if can't parse
+    }
+
+    // For numeric values, check if it's already a number type
+    if (typeof cell === "number") {
+      return cell.toString(); // e.g., 720000 -> "720000", 0.235 -> "0.235"
+    }
+
+    // Case 1 & 2: Parse string numbers (with or without commas)
+    const numericValue = value.replace(/,/g, ""); // Remove commas: "720,000" -> "720000"
+    const num = Number(numericValue);
+
+    if (!isNaN(num)) {
+      // Return as string to maintain consistency
+      // e.g., "720000" -> "720000", "0.235" -> "0.235"
+      return num.toString();
+    }
+
+    // If it's neither percentage nor valid number, return as string
+    return value;
   }
 
   private parseBoolean(cell: unknown): boolean {

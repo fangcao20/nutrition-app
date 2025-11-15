@@ -12,7 +12,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
 } from '@tanstack/react-table';
-import { Upload, Calculator, Download, X, ArrowUpDown, Save } from 'lucide-react';
+import { Upload, Calculator, Download, X, ArrowUpDown, Save, Trash2 } from 'lucide-react';
 import type { 
   UsageInputData, 
   UsageCalculationRow, 
@@ -136,11 +136,17 @@ function DataTable<T>({
           </thead>
           <tbody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b transition-colors hover:bg-muted/20 h-8"
-                >
+              table.getRowModel().rows.map((row) => {
+                const hasError = (row.original as any)?.hasError;
+                return (
+                  <tr
+                    key={row.id}
+                    className={`border-b transition-colors h-8 ${
+                      hasError
+                        ? "bg-red-50 hover:bg-red-100"
+                        : "hover:bg-muted/20"
+                    }`}
+                  >
                   {row.getVisibleCells().map((cell) => (
                     <td 
                       key={cell.id} 
@@ -157,7 +163,8 @@ function DataTable<T>({
                     </td>
                   ))}
                 </tr>
-              ))
+                );
+              })
             ) : (
               <tr>
                 <td
@@ -214,6 +221,11 @@ export default function UsageManagementTable() {
   const [currentStep, setCurrentStep] = useState<'select' | 'review' | 'result'>('select');
   const [calculationResult, setCalculationResult] = useState<UsageCalculationResult | null>(null);
 
+  // Calculate error count
+  const errorCount = useMemo(() => {
+    return inputData.filter((item: any) => item.hasError).length;
+  }, [inputData]);
+
   // Get current month/year as default
   useEffect(() => {
     const now = new Date();
@@ -222,99 +234,177 @@ export default function UsageManagementTable() {
     setSelectedMonthYear(`${year}-${month}`);
   }, []);
 
+  // Function to remove a row from input data
+  const removeRow = useCallback((index: number) => {
+    setInputData(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   // Input data table for review
-  const inputColumns = useMemo<ColumnDef<UsageInputData>[]>(() => [
-    {
-      id: 'stt',
-      header: () => <div className="px-3 py-2 text-xs font-medium">STT</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center text-xs">
-          {row.index + 1}
-        </div>
-      ),
-      size: 50,
-    },
-    {
-      accessorKey: 'foodId',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="flex-1"
-        >
-          Mã số
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center font-medium">
-          {row.getValue('foodId')}
-        </div>
-      ),
-      size: 80,
-    },
-    {
-      accessorKey: 'originName',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Nơi lấy mẫu</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center">
-          {row.getValue('originName')}
-        </div>
-      ),
-      size: 100,
-    },
-    {
-      accessorKey: 'foodName',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Thực phẩm</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center">
-          {row.getValue('foodName')}
-        </div>
-      ),
-      size: 100,
-    },
-    {
-      accessorKey: 'unit',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Đơn vị tính</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center">
-          {row.getValue('unit')}
-        </div>
-      ),
-      size: 80,
-    },
-    {
-      accessorKey: 'value',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Giá trị</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center justify-end">
-          {(row.getValue('value') as number).toLocaleString()}
-        </div>
-      ),
-      size: 80,
-    },
-    {
-      accessorKey: 'monthYear',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Ngày tháng</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center">
-          {row.getValue('monthYear') || '-'}
-        </div>
-      ),
-      size: 100,
-    },
-    {
-      accessorKey: 'quantity',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Số lượng</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center justify-end">
-          {(row.getValue('quantity') as number).toLocaleString()}
-        </div>
-      ),
-      size: 80,
-    },
-  ], []);
+  const inputColumns = useMemo<ColumnDef<UsageInputData>[]>(() => {
+    const baseColumns: ColumnDef<UsageInputData>[] = [
+      {
+        id: 'stt',
+        header: () => <div className="px-3 py-2 text-xs font-medium">STT</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center text-xs">
+            {row.index + 1}
+          </div>
+        ),
+        size: 50,
+      },
+      {
+        accessorKey: 'foodId',
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            className="flex-1"
+          >
+            Mã số
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center font-medium">
+            {row.getValue('foodId')}
+          </div>
+        ),
+        size: 80,
+      },
+      {
+        accessorKey: 'originName',
+        header: () => <div className="px-3 py-2 text-xs font-medium">Nơi lấy mẫu</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center">
+            {row.getValue('originName')}
+          </div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: 'foodName',
+        header: () => <div className="px-3 py-2 text-xs font-medium">Thực phẩm</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center">
+            {row.getValue('foodName')}
+          </div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: 'unit',
+        header: () => <div className="px-3 py-2 text-xs font-medium">Đơn vị tính</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center">
+            {row.getValue('unit')}
+          </div>
+        ),
+        size: 80,
+      },
+      {
+        accessorKey: 'value',
+        header: () => <div className="px-3 py-2 text-xs font-medium">Giá trị</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center justify-end">
+            {(row.getValue('value') as number).toLocaleString()}
+          </div>
+        ),
+        size: 80,
+      },
+      {
+        accessorKey: 'monthYear',
+        header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Ngày tháng</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center bg-orange-100">
+            {row.getValue('monthYear') || '-'}
+          </div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: 'quantity',
+        header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Số lượng</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center justify-end bg-orange-100">
+            {(row.getValue('quantity') as number).toLocaleString()}
+          </div>
+        ),
+        size: 80,
+      },
+      {
+        accessorKey: 'totalCalories',
+        header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Tổng Calo</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center justify-end bg-orange-100">
+            {(row.getValue('totalCalories') as number)?.toLocaleString() || '-'}
+          </div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: 'hh31Patient',
+        header: () => <div className="px-3 py-2 text-xs font-medium bg-blue-100">HH 3.1/Người lấy mẫu</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center bg-blue-100">
+            {row.getValue('hh31Patient') || '-'}
+          </div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: 'destinationName',
+        header: () => <div className="px-3 py-2 text-xs font-medium">Nơi xuất</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center">
+            {row.getValue('destinationName') || '-'}
+          </div>
+        ),
+        size: 100,
+      },
+    ];
+
+    // Conditionally add Error column if there are errors
+    if (errorCount > 0) {
+      baseColumns.push({
+        accessorKey: 'errorMessage',
+        header: () => <div className="px-3 py-2 text-xs font-medium text-red-600">Lỗi</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center text-red-600 text-xs">
+            {row.getValue('errorMessage') || ''}
+          </div>
+        ),
+        size: 200,
+      });
+
+      // Add Action column to remove error rows
+      baseColumns.push({
+        id: 'actions',
+        header: () => <div className="px-3 py-2 text-xs font-medium text-red-600">Xóa</div>,
+        cell: ({ row }) => {
+          const hasError = (row.original as any)?.hasError;
+          return hasError ? (
+            <div className="px-3 h-full flex items-center justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeRow(row.index)}
+                className="p-1 h-6 w-6 text-red-600 hover:text-red-800 hover:bg-red-50"
+                title="Xóa dòng lỗi"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="px-3 h-full flex items-center justify-center"></div>
+          );
+        },
+        size: 70,
+      });
+    }
+
+    return baseColumns;
+  }, [errorCount, removeRow]);
 
   // Result data table
   const resultColumns = useMemo<ColumnDef<UsageCalculationRow>[]>(() => [
@@ -379,44 +469,78 @@ export default function UsageManagementTable() {
       size: 100,
     },
     {
-      accessorKey: 'quantity',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Số lượng</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center justify-end">
-          {(row.getValue('quantity') as number).toLocaleString()}
-        </div>
-      ),
-      size: 100,
-    },
-    {
       accessorKey: 'monthYear',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Ngày tháng</div>,
+      header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Ngày tháng</div>,
       cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center">
+        <div className="px-3 h-full flex items-center bg-orange-100">
           {row.getValue('monthYear') || '-'}
         </div>
       ),
       size: 100,
     },
     {
-      accessorKey: 'totalCalories',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-blue-100">Tổng Calo</div>,
+      accessorKey: 'quantity',
+      header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Số lượng</div>,
       cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center justify-end bg-blue-50 font-medium">
+        <div className="px-3 h-full flex items-center justify-end bg-orange-100">
+          {(row.getValue('quantity') as number).toLocaleString()}
+        </div>
+      ),
+      size: 100,
+    },
+    {
+      accessorKey: 'totalCalories',
+      header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Tổng Calo</div>,
+      cell: ({ row }) => (
+        <div className="px-3 h-full flex items-center justify-end bg-orange-100 font-medium">
           {(row.getValue('totalCalories') as number).toLocaleString()}
         </div>
       ),
       size: 100,
     },
     {
-      accessorKey: 'usedCalories',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Calo sử dụng</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center justify-end bg-pink-50">
-          {formatCalorieUsage(row.getValue('usedCalories') as string | number)}
-        </div>
-      ),
-      size: 120,
+      id: 'used_calories_group',
+      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
+      columns: [
+        {
+          accessorKey: 'usedCalories',
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>,
+          cell: ({ row }) => (
+            <div className="px-3 h-full flex items-center justify-end bg-pink-50">
+              {formatCalorieUsage(row.getValue('usedCalories') as string | number)}
+            </div>
+          ),
+          size: 120,
+        },
+        {
+          accessorKey: 'totalUsedCalories',
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tổng Calo sử dụng</div>,
+          cell: ({ row }) => {
+            // Calculate totalUsedCalories if not available from data
+            // If < 1 (percentage) → multiply with totalCalories, if >= 1 (absolute) → multiply with quantity
+            let totalUsedCalories = row.getValue('totalUsedCalories') as number;
+            if (!totalUsedCalories) {
+              const usedCalories = row.getValue('usedCalories');
+              const totalCalories = row.getValue('totalCalories') as number;
+              const quantity = row.getValue('quantity') as number;
+              if (usedCalories && totalCalories && quantity) {
+                const numValue = parseFloat(String(usedCalories));
+                if (!isNaN(numValue)) {
+                  totalUsedCalories = numValue < 1 ? 
+                    Math.round(numValue * totalCalories) : 
+                    Math.round(numValue * quantity);
+                }
+              }
+            }
+            return (
+              <div className="px-3 h-full flex items-center justify-end bg-pink-50">
+                {totalUsedCalories ? totalUsedCalories.toLocaleString() : ''}
+              </div>
+            );
+          },
+          size: 120,
+        },
+      ],
     },
     // HH columns group
     {
@@ -425,7 +549,7 @@ export default function UsageManagementTable() {
       columns: [
         {
           accessorKey: 'hh11Ratio',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {formatRatio(row.getValue('hh11Ratio') as number)}
@@ -435,7 +559,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh11Calories',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Calo</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Calo</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {row.getValue('hh11Calories') !== null && row.getValue('hh11Calories') !== undefined ? (row.getValue('hh11Calories') as number).toLocaleString() : ''}
@@ -445,7 +569,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh11Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">BN</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh11Patient') || ''}
@@ -462,7 +586,7 @@ export default function UsageManagementTable() {
       columns: [
         {
           accessorKey: 'hh21Ratio',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">Tỉ lệ</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Tỉ lệ</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {formatRatio(row.getValue('hh21Ratio') as number)}
@@ -472,7 +596,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh21Calories',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">Calo</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Calo</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {row.getValue('hh21Calories') ? (row.getValue('hh21Calories') as number).toLocaleString() : ''}
@@ -482,7 +606,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh21Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">BN</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-green-50">
               {row.getValue('hh21Patient') || ''}
@@ -499,7 +623,7 @@ export default function UsageManagementTable() {
       columns: [
         {
           accessorKey: 'hh22Ratio',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {formatRatio(row.getValue('hh22Ratio') as number)}
@@ -509,7 +633,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh22Calories',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Calo</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Calo</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {row.getValue('hh22Calories') ? (row.getValue('hh22Calories') as number).toLocaleString() : ''}
@@ -519,7 +643,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh22Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">BN</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh22Patient') || ''}
@@ -536,7 +660,7 @@ export default function UsageManagementTable() {
       columns: [
         {
           accessorKey: 'hh23Ratio',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">Tỉ lệ</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Tỉ lệ</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {formatRatio(row.getValue('hh23Ratio') as number)}
@@ -546,7 +670,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh23Calories',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">Calo</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Calo</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {row.getValue('hh23Calories') ? (row.getValue('hh23Calories') as number).toLocaleString() : ''}
@@ -556,7 +680,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh23Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">BN</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-green-50">
               {row.getValue('hh23Patient') || ''}
@@ -573,7 +697,7 @@ export default function UsageManagementTable() {
       columns: [
         {
           accessorKey: 'hh31Ratio',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {formatRatio(row.getValue('hh31Ratio') as number)}
@@ -583,7 +707,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh31Calories',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Calo</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Calo</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {row.getValue('hh31Calories') ? (row.getValue('hh31Calories') as number).toLocaleString() : ''}
@@ -593,7 +717,7 @@ export default function UsageManagementTable() {
         },
         {
           accessorKey: 'hh31Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">BN</div>,
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh31Patient') || ''}
@@ -642,6 +766,34 @@ export default function UsageManagementTable() {
         </div>
       ),
       size: 110,
+    },
+    {
+      accessorKey: 'applyDate',
+      header: () => <div className="px-3 py-2 text-xs font-medium">Ngày áp dụng</div>,
+      cell: ({ row }) => (
+        <div className="px-3 h-full flex items-center">
+          {row.getValue('applyDate') || '-'}
+        </div>
+      ),
+      size: 130,
+    },
+    {
+      accessorKey: 'active',
+      header: () => <div className="px-3 py-2 text-xs font-medium">Trạng thái</div>,
+      cell: ({ row }) => (
+        <div className="px-3 h-full flex items-center">
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+              row.getValue('active')
+                ? 'bg-green-50 text-green-700'
+                : 'bg-gray-50 text-gray-700'
+            }`}
+          >
+            {row.getValue('active') ? 'Hoạt động' : 'Ngừng'}
+          </span>
+        </div>
+      ),
+      size: 120,
     },
   ], []);
 
@@ -832,6 +984,11 @@ export default function UsageManagementTable() {
               <p className="text-sm text-muted-foreground mt-1">
                 Thời gian đã chọn: <strong>{selectedMonthYear}</strong> | 
                 Tổng số dòng: <strong>{inputData.length}</strong>
+                {errorCount > 0 && (
+                  <span className="text-red-600 font-medium ml-2">
+                    | Lỗi: <strong>{errorCount}</strong> dòng
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex gap-2">
@@ -839,7 +996,11 @@ export default function UsageManagementTable() {
                 <X className="w-4 h-4 mr-2" />
                 Hủy
               </Button>
-              <Button onClick={handleCalculate} disabled={loading}>
+              <Button 
+                onClick={handleCalculate} 
+                disabled={loading || errorCount > 0}
+                className={errorCount > 0 ? 'opacity-50 cursor-not-allowed' : ''}
+              >
                 <Calculator className="w-4 h-4 mr-2" />
                 {loading ? 'Đang tính...' : 'Tính toán'}
               </Button>

@@ -256,7 +256,7 @@ export default function FoodLossEditorModal({
                         />
                       </div>
                       <div>
-                        <label className={`text-xs ${labelColor}`}>Bệnh nhân</label>
+                        <label className={`text-xs ${labelColor}`}>Người lấy mẫu</label>
                         <Input
                           value={(editableFood[component.patientField as keyof FoodWithCategories] as string) || ''}
                           onChange={(e) => handleFieldChange(component.patientField as keyof FoodWithCategories, e.target.value)}

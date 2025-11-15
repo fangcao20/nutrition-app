@@ -256,7 +256,7 @@
 //                     />
 //                   </div>
 //                   <div>
-//                     <label className="text-xs text-yellow-700">Bệnh nhân</label>
+//                     <label className="text-xs text-yellow-700">Người lấy mẫu</label>
 //                     <Input
 //                       value={formData.hh_1_1_patient}
 //                       onChange={(e) => handleInputChange('hh_1_1_patient', e.target.value)}
@@ -279,7 +279,7 @@
 //                     />
 //                   </div>
 //                   <div>
-//                     <label className="text-xs text-green-700">Bệnh nhân</label>
+//                     <label className="text-xs text-green-700">Người lấy mẫu</label>
 //                     <Input
 //                       value={formData.hh_2_1_patient}
 //                       onChange={(e) => handleInputChange('hh_2_1_patient', e.target.value)}
@@ -302,7 +302,7 @@
 //                     />
 //                   </div>
 //                   <div>
-//                     <label className="text-xs text-yellow-700">Bệnh nhân</label>
+//                     <label className="text-xs text-yellow-700">Người lấy mẫu</label>
 //                     <Input
 //                       value={formData.hh_2_2_patient}
 //                       onChange={(e) => handleInputChange('hh_2_2_patient', e.target.value)}
@@ -325,7 +325,7 @@
 //                     />
 //                   </div>
 //                   <div>
-//                     <label className="text-xs text-green-700">Bệnh nhân</label>
+//                     <label className="text-xs text-green-700">Người lấy mẫu</label>
 //                     <Input
 //                       value={formData.hh_2_3_patient}
 //                       onChange={(e) => handleInputChange('hh_2_3_patient', e.target.value)}
@@ -348,7 +348,7 @@
 //                     />
 //                   </div>
 //                   <div>
-//                     <label className="text-xs text-yellow-700">Bệnh nhân</label>
+//                     <label className="text-xs text-yellow-700">Người lấy mẫu</label>
 //                     <Input
 //                       value={formData.hh_3_1_patient}
 //                       onChange={(e) => handleInputChange('hh_3_1_patient', e.target.value)}

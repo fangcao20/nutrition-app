@@ -305,14 +305,32 @@ export default function HistoryManagementTable() {
       size: 100,
     },
     {
-      accessorKey: 'usedCalories',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Calo sử dụng</div>,
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center justify-end bg-pink-50">
-          {formatCalorieUsage(row.getValue('usedCalories') as string | number)}
-        </div>
-      ),
-      size: 120,
+      id: 'used_calories_group',
+      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
+      columns: [
+        {
+          accessorKey: 'usedCalories',
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>,
+          cell: ({ row }) => (
+            <div className="px-3 h-full flex items-center justify-end bg-pink-50">
+              {formatCalorieUsage(row.getValue('usedCalories') as string | number)}
+            </div>
+          ),
+          size: 120,
+        },
+        {
+          accessorKey: 'totalUsedCalories',
+          header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tổng Calo sử dụng</div>,
+          cell: ({ row }) => {
+            return (
+              <div className="px-3 h-full flex items-center justify-end bg-pink-50">
+                {(row.getValue('totalUsedCalories') as number).toLocaleString()}
+              </div>
+            );
+          },
+          size: 120,
+        },
+      ],
     },
     // HH columns group
     {
@@ -341,7 +359,7 @@ export default function HistoryManagementTable() {
         },
         {
           accessorKey: 'hh11Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">BN</div>,
+          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh11Patient') || ''}
@@ -378,7 +396,7 @@ export default function HistoryManagementTable() {
         },
         {
           accessorKey: 'hh21Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">BN</div>,
+          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-green-50">
               {row.getValue('hh21Patient') || ''}
@@ -415,7 +433,7 @@ export default function HistoryManagementTable() {
         },
         {
           accessorKey: 'hh22Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">BN</div>,
+          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh22Patient') || ''}
@@ -452,7 +470,7 @@ export default function HistoryManagementTable() {
         },
         {
           accessorKey: 'hh23Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">BN</div>,
+          header: () => <div className="px-2 py-1 text-xs font-medium bg-green-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-green-50">
               {row.getValue('hh23Patient') || ''}
@@ -489,7 +507,7 @@ export default function HistoryManagementTable() {
         },
         {
           accessorKey: 'hh31Patient',
-          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">BN</div>,
+          header: () => <div className="px-2 py-1 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh31Patient') || ''}
@@ -538,6 +556,34 @@ export default function HistoryManagementTable() {
         </div>
       ),
       size: 110,
+    },
+    {
+      accessorKey: 'applyDate',
+      header: () => <div className="px-3 py-2 text-xs font-medium">Ngày áp dụng</div>,
+      cell: ({ row }) => (
+        <div className="px-3 h-full flex items-center">
+          {row.getValue('applyDate') || '-'}
+        </div>
+      ),
+      size: 130,
+    },
+    {
+      accessorKey: 'active',
+      header: () => <div className="px-3 py-2 text-xs font-medium">Trạng thái</div>,
+      cell: ({ row }) => (
+        <div className="px-3 h-full flex items-center">
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+              row.getValue('active')
+                ? 'bg-green-50 text-green-700'
+                : 'bg-gray-50 text-gray-700'
+            }`}
+          >
+            {row.getValue('active') ? 'Hoạt động' : 'Ngừng'}
+          </span>
+        </div>
+      ),
+      size: 120,
     },
   ], []);
 

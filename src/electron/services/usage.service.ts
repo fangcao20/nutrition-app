@@ -104,24 +104,118 @@ class UsageService {
       const rawData = XLSX.utils.sheet_to_json(worksheet);
 
       // Map to our data structure (assuming Excel columns match our interface)
-      const parsedData = rawData.map((row: any) => ({
-        foodId: row["Mã số"] || row["A"] || "",
-        originName: row["Nơi lấy mẫu"] || row["B"] || "",
-        foodName: row["Thực phẩm"] || row["C"] || "",
-        unit: row["Đơn vị tính"] || row["D"] || "",
-        value: parseFloat(row["Giá trị"] || row["E"] || 0),
-        monthYear: row["Ngày tháng"] || row["F"] || "",
-        quantity: parseFloat(row["Số lượng"] || row["G"] || 0),
-      }));
+      const parsedData = rawData.map((row: any) => {
+        const foodId = row["Mã số"] || row["A"] || "";
+        const originName = row["Nơi lấy mẫu"] || row["B"] || "";
+        const foodName = row["Thực phẩm"] || row["C"] || "";
+        const unit = row["Đơn vị tính"] || row["D"] || "";
+        const value = parseFloat(row["Giá trị"] || row["E"] || 0);
+        const quantity = parseFloat(row["Số lượng"] || row["G"] || 0);
+
+        return {
+          foodId,
+          originName,
+          foodName,
+          unit,
+          value,
+          monthYear: row["Ngày tháng"] || row["F"] || "",
+          quantity,
+          totalCalories: quantity * value, // Tính tự động: Số lượng × Giá trị
+          hh31Patient: row["HH 3.1"] || row["I"] || "", // Cột I trong Excel
+          destinationName: row["Nơi xuất"] || row["J"] || "", // Cột J trong Excel
+        };
+      });
+
+      // Remove first item if needed (in case there's still a header row)
+      const finalData = parsedData.slice(1);
 
       console.log(
-        `📊 Parsed ${parsedData.length} rows from Excel file: ${filePath}`
+        `📊 Parsed ${finalData.length} rows from Excel file: ${filePath}`
       );
-      return parsedData;
+
+      // Validate each row
+      const validatedData = await this.validateUsageInputData(finalData);
+      return validatedData;
     } catch (error) {
       console.error("❌ Error parsing Excel file:", error);
       throw error;
     }
+  }
+
+  // Validate usage input data by checking against database
+  async validateUsageInputData(inputData: any[]): Promise<any[]> {
+    const db = databaseManager.getConnection();
+
+    return inputData.map((row) => {
+      let hasError = false;
+      let errorMessage = "";
+
+      // Find matching food in database
+      const foodQuery = `
+        SELECT 
+          f.id,
+          f.hh_3_1_patient,
+          d.name as destination_name,
+          o.name as origin_name,
+          fn.name as food_name,
+          u.name as unit_name
+        FROM foods f
+        LEFT JOIN destinations d ON f.destination_id = d.id
+        LEFT JOIN origins o ON f.origin_id = o.id
+        LEFT JOIN food_names fn ON f.food_name_id = fn.id
+        LEFT JOIN units u ON f.unit_id = u.id
+        WHERE f.food_id = ? 
+          AND o.name = ?
+          AND fn.name = ?
+          AND u.name = ?
+          AND f.calorie_per_unit = ?
+          AND f.active = 1
+      `;
+
+      const foodRecord = db
+        .prepare(foodQuery)
+        .get(row.foodId, row.originName, row.foodName, row.unit, row.value) as
+        | {
+            id: number;
+            hh_3_1_patient: string;
+            destination_name: string;
+            origin_name: string;
+            food_name: string;
+            unit_name: string;
+          }
+        | undefined;
+
+      if (!foodRecord) {
+        hasError = true;
+        errorMessage = "Không tìm thấy thông tin thực phẩm trong cơ sở dữ liệu";
+      } else {
+        // Check if HH 3.1 matches
+        if (row.hh31Patient && foodRecord.hh_3_1_patient !== row.hh31Patient) {
+          hasError = true;
+          errorMessage = `HH 3.1 không khớp. DB: "${
+            foodRecord.hh_3_1_patient || ""
+          }", Excel: "${row.hh31Patient}"`;
+        }
+
+        // Check if destination matches
+        if (
+          row.destinationName &&
+          foodRecord.destination_name !== row.destinationName
+        ) {
+          if (errorMessage) errorMessage += "; ";
+          hasError = true;
+          errorMessage += `Nơi xuất không khớp. DB: "${
+            foodRecord.destination_name || ""
+          }", Excel: "${row.destinationName}"`;
+        }
+      }
+
+      return {
+        ...row,
+        hasError,
+        errorMessage,
+      };
+    });
   }
 
   async exportToExcel(
@@ -146,19 +240,19 @@ class UsageService {
         "Calo sử dụng": item.usedCalories,
         "HH 1.1 - Tỉ lệ": item.hh11Ratio || "",
         "HH 1.1 - Calo": item.hh11Calories || "",
-        "HH 1.1 - BN": item.hh11Patient || "",
+        "HH 1.1 - Người lấy mẫu": item.hh11Patient || "",
         "HH 2.1 - Tỉ lệ": item.hh21Ratio || "",
         "HH 2.1 - Calo": item.hh21Calories || "",
-        "HH 2.1 - BN": item.hh21Patient || "",
+        "HH 2.1 - Người lấy mẫu": item.hh21Patient || "",
         "HH 2.2 - Tỉ lệ": item.hh22Ratio || "",
         "HH 2.2 - Calo": item.hh22Calories || "",
-        "HH 2.2 - BN": item.hh22Patient || "",
+        "HH 2.2 - Người lấy mẫu": item.hh22Patient || "",
         "HH 2.3 - Tỉ lệ": item.hh23Ratio || "",
         "HH 2.3 - Calo": item.hh23Calories || "",
-        "HH 2.3 - BN": item.hh23Patient || "",
+        "HH 2.3 - Người lấy mẫu": item.hh23Patient || "",
         "HH 3.1 - Tỉ lệ": item.hh31Ratio || "",
         "HH 3.1 - Calo": item.hh31Calories || "",
-        "HH 3.1 - BN": item.hh31Patient || "",
+        "HH 3.1 - Người lấy mẫu": item.hh31Patient || "",
         "Tỉ lệ lỗ": item.lossRatio || "",
         "Calo còn lại": item.remainingCalories,
         "Nơi xuất": item.destinationName || "",
@@ -278,6 +372,8 @@ class UsageService {
           f.hh_3_1_ratio as hh31Ratio,
           f.hh_3_1_patient as hh31Patient,
           f.loss_ratio as lossRatio,
+          f.apply_date as applyDate,
+          f.active,
           o.name as originName,
           fn.name as foodName,
           u.name as unit,
@@ -327,6 +423,18 @@ class UsageService {
             )
           : null;
 
+        // Calculate total used calories
+        // If < 1 (percentage) → multiply with totalCalories, if >= 1 (absolute) → multiply with quantity
+        let totalUsedCalories = 0;
+        if (record.calorieUsage) {
+          const usageValue = parseFloat(String(record.calorieUsage));
+          if (!isNaN(usageValue)) {
+            totalUsedCalories = usageValue < 1 ? 
+              Math.round(usageValue * totalCalories) : 
+              Math.round(usageValue * record.quantity);
+          }
+        }
+
         // Calculate remaining calories based on loss ratio
         let remainingCalories = totalCalories;
         if (record.lossRatio) {
@@ -352,6 +460,7 @@ class UsageService {
           selectedMonthYear: record.import_month_year,
           totalCalories,
           usedCalories: record.calorieUsage,
+          totalUsedCalories,
           hh11Ratio: record.hh11Ratio ? parseFloat(record.hh11Ratio) : null,
           hh11Calories,
           hh11Patient: record.hh11Patient,
@@ -371,6 +480,8 @@ class UsageService {
           remainingCalories,
           destinationName: record.destinationName,
           insuranceTypeName: record.insuranceTypeName,
+          applyDate: record.applyDate,
+          active: record.active === 1,
         };
       });
 
