@@ -1,4 +1,5 @@
 import { app, BrowserWindow, screen } from "electron";
+import { autoUpdater } from "electron-updater";
 import path from "path";
 import { isDev } from "./utils.js";
 import { databaseManager } from "./database/database-manager.js";
@@ -7,6 +8,7 @@ import { FoodHandler } from "./handlers/food.handler.js";
 import { DialogHandler } from "./handlers/dialog.handler.js";
 import { CategoryHandler } from "./handlers/category.handler.js";
 import { UsageHandler } from "./handlers/usage.handler.js";
+import { UpdateHandler } from "./handlers/update.handler.js";
 import { getPreloadPath } from "./pathResolver.js";
 
 // Initialize database and handlers
@@ -25,6 +27,7 @@ async function initializeApp() {
     new DialogHandler();
     new CategoryHandler(serviceLocator.get("category"));
     new UsageHandler(serviceLocator.get("usage"));
+    new UpdateHandler();
 
     console.log("✅ App initialization complete");
   } catch (error) {
@@ -53,4 +56,53 @@ app.on("ready", async () => {
   } else {
     mainWindow.loadFile(path.join(app.getAppPath(), "/dist-react/index.html"));
   }
+
+  // Setup auto-updater for production builds
+  if (!isDev()) {
+    setupAutoUpdater(mainWindow);
+  }
 });
+
+// Auto-updater configuration
+function setupAutoUpdater(mainWindow: BrowserWindow) {
+  // Configure auto-updater
+  autoUpdater.autoDownload = false; // Ask user before downloading
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  // Check for updates when app is ready
+  autoUpdater.checkForUpdatesAndNotify();
+
+  // Set up periodic update checks (every 30 minutes)
+  setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify();
+  }, 30 * 60 * 1000);
+
+  // Event listeners
+  autoUpdater.on("update-available", (info) => {
+    console.log("Update available:", info.version);
+    // You can show a notification to user here
+    mainWindow.webContents.send("update-available", info);
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    console.log("Update not available.");
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("Auto-updater error:", err);
+  });
+
+  autoUpdater.on("download-progress", (progressObj) => {
+    console.log("Download progress:", Math.round(progressObj.percent) + "%");
+    mainWindow.webContents.send("update-progress", progressObj);
+  });
+
+  autoUpdater.on("update-downloaded", () => {
+    console.log("Update downloaded");
+    mainWindow.webContents.send("update-downloaded");
+    // Auto-restart to apply update
+    setTimeout(() => {
+      autoUpdater.quitAndInstall();
+    }, 5000); // Give user 5 seconds to save work
+  });
+}

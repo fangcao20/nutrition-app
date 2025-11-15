@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
+import { UpdateNotification } from './components/UpdateNotification';
 import SettingsPage from './pages/SettingsPage';
 import UsagePage from './pages/UsagePage';
 import CategoriesPage from './pages/CategoriesPage';
@@ -44,6 +45,9 @@ function App() {
           </TabsContent>
         </Tabs>
       </div>
+      
+      {/* Update notification */}
+      <UpdateNotification />
     </div>
   );
 }

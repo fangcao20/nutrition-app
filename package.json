@@ -1,7 +1,7 @@
 {
   "name": "nutrition-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -20,7 +20,10 @@
     "clean:db:prod": "tsx scripts/clean-database.ts prod",
     "dist:mac": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --mac --arm64",
     "dist:win": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --win --x64",
-    "dist:linux": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --linux --x64"
+    "dist:linux": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --linux --x64",
+    "publish:mac": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --mac --arm64 --publish=always",
+    "publish:win": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --win --x64 --publish=always",
+    "publish:linux": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --linux --x64 --publish=always"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
@@ -28,6 +31,7 @@
     "better-sqlite3": "^12.4.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.6.2",
     "lucide-react": "^0.552.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

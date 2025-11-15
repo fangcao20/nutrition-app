@@ -58,11 +58,23 @@ const dialogAPI = {
   showSaveDialog: (options: any) => ipcInvoke("dialog:showSaveDialog", options),
 };
 
+const updateAPI = {
+  onUpdateAvailable: (callback: (info: any) => void) =>
+    ipcOn("update-available", callback),
+  onUpdateProgress: (callback: (progress: any) => void) =>
+    ipcOn("update-progress", callback),
+  onUpdateDownloaded: (callback: () => void) =>
+    ipcOn("update-downloaded", callback),
+  downloadUpdate: () => ipcInvoke("update:download"),
+  installUpdate: () => ipcInvoke("update:install"),
+};
+
 const electronAPI: ElectronAPI = {
   food: foodAPI,
   category: categoryAPI,
   usage: usageAPI,
   dialog: dialogAPI,
+  update: updateAPI,
 };
 
 contextBridge.exposeInMainWorld("electronAPI", electronAPI);

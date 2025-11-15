@@ -58,16 +58,34 @@ export interface BaseFilters {
   orderDirection?: "ASC" | "DESC";
 }
 
+export interface UpdateEventPayloadMapping {
+  "update-available": any;
+  "update-progress": any;
+  "update-downloaded": void;
+  "update:download": void;
+  "update:install": void;
+}
+
 export type EventPayloadMapping = FoodEventPayloadMapping &
   CategoryEventPayloadMapping &
   UsageEventPayloadMapping &
-  DialogEventPayloadMapping;
+  DialogEventPayloadMapping &
+  UpdateEventPayloadMapping;
+
+export interface UpdateAPI {
+  onUpdateAvailable: (callback: (info: any) => void) => void;
+  onUpdateProgress: (callback: (progress: any) => void) => void;
+  onUpdateDownloaded: (callback: () => void) => void;
+  downloadUpdate: () => Promise<UpdateEventPayloadMapping["update:download"]>;
+  installUpdate: () => Promise<UpdateEventPayloadMapping["update:install"]>;
+}
 
 export interface ElectronAPI {
   food: FoodAPI;
   category: CategoryAPI;
   usage: UsageAPI;
   dialog: DialogAPI;
+  update: UpdateAPI;
 }
 
 declare global {
