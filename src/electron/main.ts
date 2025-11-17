@@ -1,5 +1,6 @@
 import { app, BrowserWindow, screen } from "electron";
-import { autoUpdater } from "electron-updater";
+import pkg from "electron-updater";
+const { autoUpdater } = pkg;
 import path from "path";
 import { isDev } from "./utils.js";
 import { databaseManager } from "./database/database-manager.js";
