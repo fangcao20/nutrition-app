@@ -46,7 +46,7 @@ function CategoryTable({ data, title, loading }: CategoryTableProps) {
             variant="ghost"
             size="sm"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="px-3 py-2 text-xs font-medium h-auto"
+            className="px-2 py-1 text-xs font-medium h-auto"
           >
             Tên
             <ArrowUpDown className="ml-2 h-3 w-3" />

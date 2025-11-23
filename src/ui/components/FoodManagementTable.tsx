@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import {
   useReactTable,
   getCoreRowModel,
@@ -10,6 +11,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type Column,
+  Row,
 } from '@tanstack/react-table';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -32,110 +34,42 @@ const formatRatio = (value: string | null | undefined): string => {
   return formatNumber(numValue);
 };
 
-// Dropdown Filter cho cột có giá trị/null
-function NullableDropdownFilter({ 
-  column, 
-}: { 
-  column: Column<FoodWithCategories, unknown>; 
-  data: FoodWithCategories[];
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+const textFilter = (row: Row<FoodWithCategories>, id: string, value: string[]) => {
+  if (!value || value.length === 0) return false;
+  const cellValue = row.getValue(id);
+  const isEmpty = cellValue === null || cellValue === undefined || cellValue === '';
   
-  const filterValue = column.getFilterValue() as string[] | undefined;
+  if (value.includes('(Trống)') && isEmpty) return true;
+  if (!isEmpty && value.includes(formatRatio(String(cellValue)))) return true;
   
-  // Tạo options: Có giá trị, Không có giá trị
-  const options = ['Có giá trị', 'Không có giá trị'];
-  
-  // Close dropdown khi click outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-  
-  const handleValueToggle = (value: string) => {
-    const currentFilter = filterValue || [];
-    const newFilter = currentFilter.includes(value)
-      ? currentFilter.filter(v => v !== value)
-      : [...currentFilter, value];
-    
-    column.setFilterValue(newFilter.length === options.length ? undefined : newFilter);
-  };
-  
-  const handleSelectAll = () => {
-    column.setFilterValue(undefined);
-  };
-  
-  const handleDeselectAll = () => {
-    column.setFilterValue([]);
-  };
-  
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setIsOpen(!isOpen)}
-        className="h-6 w-6 p-0 hover:bg-gray-100"
-      >
-        <ChevronDown className="h-3 w-3" />
-      </Button>
-      
-      {isOpen && (
-        <div className="absolute top-full left-0 z-[9999] mt-1 w-52 bg-white border border-gray-200 rounded-md shadow-xl">
-          <div className="space-y-1 pt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSelectAll}
-              className="w-full justify-start h-6 text-xs"
-            >
-              Chọn tất cả ({options.length})
-            </Button>
-          </div>
-          <div className="space-y-1 pb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDeselectAll}
-              className="w-full justify-start h-6 text-xs"
-            >
-              Bỏ chọn tất cả
-            </Button>
-          </div>
-          
-          <div className="max-h-48 overflow-y-auto">
-            {options.map((value) => {
-              const isSelected = !filterValue || filterValue.includes(value);
-              return (
-                <label
-                  key={value}
-                  className="flex items-center px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs"
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => handleValueToggle(value)}
-                    className="mr-2 h-3 w-3"
-                  />
-                  <span className="truncate">{value}</span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return false;
 }
 
-// Dropdown Filter Component giống Excel
+const numberFilter = (row: Row<FoodWithCategories>, id: string, filter: any) => {
+  const cellValue = row.getValue(id);
+  if (filter === undefined) return true;
+  if (filter === 'empty') {
+    return cellValue === null || cellValue === undefined || cellValue === '';
+  }
+  if (typeof filter === 'object') {
+    const floatCellValue = parseFloat(String(cellValue));
+    if (filter.op === 'equals') {
+      return floatCellValue === filter.value;
+    }
+    if (filter.op === 'lt') {
+      return floatCellValue < filter.value;
+    }
+    if (filter.op === 'gt') {
+      return floatCellValue > filter.value;
+    }
+    if (filter.op === 'between') {
+      return floatCellValue >= filter.min && floatCellValue <= filter.max;
+    }
+  }
+  return true;
+}
+
+// Enhanced Dropdown Filter Component with blank value support
 function DropdownFilter({ 
   column, 
   data 
@@ -146,12 +80,13 @@ function DropdownFilter({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null);
+  const portalDropdownRef = useRef<HTMLDivElement>(null);
   
   const columnId = column.id;
   const filterValue = column.getFilterValue() as string[] | undefined;
   
-  // Lấy tất cả giá trị unique của cột
+  // Lấy tất cả giá trị unique của cột, bao gồm cả giá trị trống
   const uniqueValues = useMemo(() => {
     const values = data.map(row => {
       const value = row[columnId as keyof FoodWithCategories];
@@ -167,8 +102,19 @@ function DropdownFilter({
         return formatNumber(value);
       }
       return value ? String(value) : '';
-    }).filter(Boolean);
-    return Array.from(new Set(values)).sort();
+    });
+    
+    const nonEmptyValues = values.filter(Boolean);
+    const hasEmptyValues = values.some(v => !v);
+    
+    const result = Array.from(new Set(nonEmptyValues)).sort();
+    
+    // Thêm option cho giá trị trống nếu có
+    if (hasEmptyValues) {
+      result.unshift('(Trống)');
+    }
+    
+    return result;
   }, [data, columnId]);
   
   // Filter theo search term
@@ -182,11 +128,19 @@ function DropdownFilter({
   // Close dropdown khi click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      const target = event.target as Node;
+      if (
+        buttonRef.current && buttonRef.current.contains(target)
+      ) {
+        return;
       }
+      if (
+        portalDropdownRef.current && portalDropdownRef.current.contains(target)
+      ) {
+        return;
+      }
+      setIsOpen(false);
     }
-    
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -208,8 +162,20 @@ function DropdownFilter({
     column.setFilterValue([]);
   };
   
+  // Get button position for portal dropdown
+  const [dropdownPos, setDropdownPos] = useState<{top: number, left: number} | null>(null);
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+      });
+    }
+  }, [isOpen]);
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="inline-block" ref={buttonRef}>
       <Button
         variant="ghost"
         size="sm"
@@ -218,9 +184,18 @@ function DropdownFilter({
       >
         <ChevronDown className="h-3 w-3" />
       </Button>
-      
-      {isOpen && (
-        <div className="absolute top-full left-0 z-[9999] mt-1 w-64 bg-white border border-gray-200 rounded-md shadow-xl overflow-hidden">
+      {isOpen && dropdownPos && ReactDOM.createPortal(
+        <div
+          ref={portalDropdownRef}
+          style={{
+            position: 'absolute',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            zIndex: 9999,
+            width: '16rem',
+          }}
+          className="bg-white border border-gray-200 rounded-md shadow-xl overflow-hidden"
+        >
           <div className="p-2 border-b border-gray-100">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
@@ -232,7 +207,6 @@ function DropdownFilter({
               />
             </div>
           </div>
-          
           <div className="space-y-1 pt-2">
             <Button
               variant="ghost"
@@ -253,14 +227,13 @@ function DropdownFilter({
               Bỏ chọn tất cả
             </Button>
           </div>
-          
           <div className="max-h-48 overflow-y-auto">
             {filteredValues.map((value) => {
               const isSelected = !filterValue || filterValue.includes(value);
               return (
                 <label
                   key={value}
-                  className="flex items-center px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs"
+                  className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer text-xs"
                 >
                   <input
                     type="checkbox"
@@ -273,15 +246,210 @@ function DropdownFilter({
               );
             })}
           </div>
-          
           {filteredValues.length === 0 && (
             <div className="p-2 text-xs text-gray-500 text-center">
               Không tìm thấy kết quả
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
+  );
+}
+
+// Number Filter Component for numeric columns
+function NumberFilter({ column }: { column: Column<FoodWithCategories, unknown> }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [operator, setOperator] = useState<'equals'|'lt'|'gt'|'between'|'empty'>('equals');
+  const [value, setValue] = useState('');
+  const [secondValue, setSecondValue] = useState('');
+  const buttonRef = useRef<HTMLDivElement>(null);
+  const portalDropdownRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        buttonRef.current && buttonRef.current.contains(target)
+      ) {
+        return;
+      }
+      if (
+        portalDropdownRef.current && portalDropdownRef.current.contains(target)
+      ) {
+        return;
+      }
+      setIsOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  
+  const handleApplyFilter = () => {
+    if (operator === 'empty') {
+      column.setFilterValue('empty');
+    } else if (operator === 'equals') {
+      column.setFilterValue(value ? { op: 'equals', value: parseFloat(value) } : undefined);
+    } else if (operator === 'lt') {
+      column.setFilterValue(value ? { op: 'lt', value: parseFloat(value) } : undefined);
+    } else if (operator === 'gt') {
+      column.setFilterValue(value ? { op: 'gt', value: parseFloat(value) } : undefined);
+    } else if (operator === 'between') {
+      if (value && secondValue) {
+        column.setFilterValue({ op: 'between', min: parseFloat(value), max: parseFloat(secondValue) });
+      } else {
+        column.setFilterValue(undefined);
+      }
+    }
+    setIsOpen(false);
+  };
+
+  const handleClearFilter = () => {
+    setValue('');
+    setSecondValue('');
+    setOperator('equals');
+    column.setFilterValue(undefined);
+    setIsOpen(false);
+  };
+  
+  // Get button position for portal dropdown
+  const [dropdownPos, setDropdownPos] = useState<{top: number, left: number} | null>(null);
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+      });
+    }
+  }, [isOpen]);
+
+  return (
+    <div className="inline-block" ref={buttonRef}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        className="h-6 w-6 p-0 hover:bg-gray-100"
+      >
+        <ChevronDown className="h-3 w-3" />
+      </Button>
+      {isOpen && dropdownPos && ReactDOM.createPortal(
+        <div
+          ref={portalDropdownRef}
+          style={{
+            position: 'absolute',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            zIndex: 9999,
+            width: '18rem',
+          }}
+          className="bg-white border border-gray-200 rounded-md shadow-xl p-3"
+        >
+          <div className="space-y-3">
+            <div className="text-xs font-medium text-gray-700">Lọc theo số</div>
+            <div className="mb-2">
+              <select
+                className="border rounded px-2 py-1 text-xs w-full"
+                value={operator}
+                onChange={e => setOperator(e.target.value as any)}
+              >
+                <option value="equals">Bằng (=)</option>
+                <option value="lt">Nhỏ hơn (&lt;)</option>
+                <option value="gt">Lớn hơn (&gt;)</option>
+                <option value="between">Trong khoảng</option>
+                <option value="empty">Trống</option>
+              </select>
+            </div>
+            {operator === 'equals' && (
+              <Input
+                type="number"
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                placeholder="Nhập số..."
+                className="h-7 text-xs mb-2"
+              />
+            )}
+            {operator === 'lt' && (
+              <Input
+                type="number"
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                placeholder="Nhỏ hơn..."
+                className="h-7 text-xs mb-2"
+              />
+            )}
+            {operator === 'gt' && (
+              <Input
+                type="number"
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                placeholder="Lớn hơn..."
+                className="h-7 text-xs mb-2"
+              />
+            )}
+            {operator === 'between' && (
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <Input
+                  type="number"
+                  value={value}
+                  onChange={e => setValue(e.target.value)}
+                  placeholder="Từ..."
+                  className="h-7 text-xs"
+                />
+                <Input
+                  type="number"
+                  value={secondValue}
+                  onChange={e => setSecondValue(e.target.value)}
+                  placeholder="Đến..."
+                  className="h-7 text-xs"
+                />
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleApplyFilter}
+                className="flex-1 h-7 text-xs"
+              >
+                Áp dụng
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleClearFilter}
+                className="flex-1 h-7 text-xs"
+              >
+                Xóa
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// Reusable Sort Button Component
+function SortButton({ 
+  column, 
+  children 
+}: { 
+  column: Column<FoodWithCategories, unknown>;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      className="flex-1 px-1 py-1 h-6 text-xs"
+    >
+      {children}
+      <ArrowUpDown className="ml-1 h-3 w-3" />
+    </Button>
   );
 }
 
@@ -462,15 +630,7 @@ export default function FoodManagementTable() {
         accessorKey: 'foodId',
         header: ({ column }) => (
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="flex-1"
-            >
-              Mã số
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
+            <SortButton column={column}>Mã số</SortButton>
             <DropdownFilter column={column} title="Mã số" data={data} />
           </div>
         ),
@@ -484,74 +644,63 @@ export default function FoodManagementTable() {
       {
         accessorKey: 'originName',
         header: ({ column }) => (
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="text-xs font-medium">Nơi lấy mẫu</div>
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Nơi lấy mẫu</SortButton>
             <DropdownFilter column={column} title="Nơi lấy mẫu" data={data} />
           </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('originName') || '-'}</div>,
         size: 130,
-        filterFn: (row, id, value: string[]) => {
-          if (!value || value.length === 0) return false;
-          const cellValue = row.getValue(id) as string;
-          return value.includes(cellValue || '');
-        },
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
       {
         accessorKey: 'foodName',
         header: ({ column }) => (
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="flex-1"
-            >
-              Thực phẩm
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
+            <SortButton column={column}>Thực phẩm</SortButton>
             <DropdownFilter column={column} title="Thực phẩm" data={data} />
           </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('foodName')}</div>,
         size: 120,
-        filterFn: (row, id, value: string[]) => {
-          if (!value || value.length === 0) return false;
-          return value.includes(String(row.getValue(id)));
-        },
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
       {
         accessorKey: 'unit',
         header: ({ column }) => (
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="text-xs font-medium">Đơn vị tính</div>
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Đơn vị tính</SortButton>
             <DropdownFilter column={column} title="Đơn vị tính" data={data} />
           </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('unit')}</div>,
         size: 100,
-        filterFn: (row, id, value: string[]) => {
-          if (!value || value.length === 0) return false;
-          return value.includes(String(row.getValue(id)));
-        },
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
       {
         accessorKey: 'caloriePerUnit',
-        header: () => (
-          <div className="px-3 py-2 text-xs font-medium">Giá trị</div>
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Giá trị</SortButton>
+            <NumberFilter column={column} />
+          </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end">{formatNumber(row.getValue('caloriePerUnit'))}</div>,
         size: 100,
+        filterFn: (row, id, filter) => numberFilter(row, id, filter),
       },
       // Calo sử dụng Group
       {
         id: 'calorie_usage_group',
-        header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
         columns: [
           {
             accessorKey: 'calorieUsage',
-            header: () => (
-              <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-pink-100">
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
+              </div>
             ),
             cell: ({ row }) => {
               const value = row.getValue('calorieUsage') as number | string | null;
@@ -566,288 +715,226 @@ export default function FoodManagementTable() {
               return <div className="px-3 h-full flex items-center justify-end bg-pink-50">{display}</div>;
             },
             size: 120,
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
           },
         ],
       },
       // HH 1.1 Group
       {
         id: 'hh_1_1_group',
-        header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 1.1</div>,
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 1.1</div>,
         columns: [
           {
             accessorKey: 'hh11Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">Tỉ lệ</div>
-                <NullableDropdownFilter column={column} data={data} />
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh11Ratio'))}</div>,
             size: 90,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id);
-              const hasValue = cellValue !== null && cellValue !== undefined && cellValue !== '';
-              if (value.includes('Có giá trị') && hasValue) return true;
-              if (value.includes('Không có giá trị') && !hasValue) return true;
-              return false;
-            },
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
           },
           {
             accessorKey: 'hh11Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <SortButton column={column}>Người lấy mẫu</SortButton>
                 <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
-            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh11Patient') || ''}</div>,
+            cell: ({ row }) => <div className="bg-yellow-50 px-2 h-full flex items-center">{row.getValue('hh11Patient') || ''}</div>,
             size: 110,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id) as string;
-              return value.includes(cellValue || '');
-            },
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
           },
         ],
       },
       // HH 2.1 Group
       {
         id: 'hh_2_1_group',
-        header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-green-100">HH 2.1</div>,
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-green-100">HH 2.1</div>,
         columns: [
           {
             accessorKey: 'hh21Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
-                <div className="text-xs font-medium">Tỉ lệ</div>
-                <NullableDropdownFilter column={column} data={data} />
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh21Ratio'))}</div>,
             size: 90,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id);
-              const hasValue = cellValue !== null && cellValue !== undefined && cellValue !== '';
-              if (value.includes('Có giá trị') && hasValue) return true;
-              if (value.includes('Không có giá trị') && !hasValue) return true;
-              return false;
-            },
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
           },
           {
             accessorKey: 'hh21Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
-                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <SortButton column={column}>Người lấy mẫu</SortButton>
                 <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh21Patient') || ''}</div>,
             size: 110,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id) as string;
-              return value.includes(cellValue || '');
-            },
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
           },
         ],
       },
       // HH 2.2 Group
       {
         id: 'hh_2_2_group',
-        header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 2.2</div>,
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 2.2</div>,
         columns: [
           {
             accessorKey: 'hh22Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">Tỉ lệ</div>
-                <NullableDropdownFilter column={column} data={data} />
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh22Ratio'))}</div>,
             size: 90,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id);
-              const hasValue = cellValue !== null && cellValue !== undefined && cellValue !== '';
-              if (value.includes('Có giá trị') && hasValue) return true;
-              if (value.includes('Không có giá trị') && !hasValue) return true;
-              return false;
-            },
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
           },
           {
             accessorKey: 'hh22Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <SortButton column={column}>Người lấy mẫu</SortButton>
                 <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh22Patient') || ''}</div>,
             size: 110,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id) as string;
-              return value.includes(cellValue || '');
-            },
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
           },
         ],
       },
       // HH 2.3 Group
       {
         id: 'hh_2_3_group',
-        header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-green-100">HH 2.3</div>,
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-green-100">HH 2.3</div>,
         columns: [
           {
             accessorKey: 'hh23Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
-                <div className="text-xs font-medium">Tỉ lệ</div>
-                <NullableDropdownFilter column={column} data={data} />
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh23Ratio'))}</div>,
             size: 90,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id);
-              const hasValue = cellValue !== null && cellValue !== undefined && cellValue !== '';
-              if (value.includes('Có giá trị') && hasValue) return true;
-              if (value.includes('Không có giá trị') && !hasValue) return true;
-              return false;
-            },
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
           },
           {
             accessorKey: 'hh23Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-green-100">
-                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <SortButton column={column}>Người lấy mẫu</SortButton>
                 <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh23Patient') || ''}</div>,
             size: 110,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id) as string;
-              return value.includes(cellValue || '');
-            },
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
           },
         ],
       },
       // HH 3.1 Group
       {
         id: 'hh_3_1_group',
-        header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 3.1</div>,
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 3.1</div>,
         columns: [
           {
             accessorKey: 'hh31Ratio',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">Tỉ lệ</div>
-                <NullableDropdownFilter column={column} data={data} />
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh31Ratio'))}</div>,
             size: 90,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id);
-              const hasValue = cellValue !== null && cellValue !== undefined && cellValue !== '';
-              if (value.includes('Có giá trị') && hasValue) return true;
-              if (value.includes('Không có giá trị') && !hasValue) return true;
-              return false;
-            },
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
           },
           {
             accessorKey: 'hh31Patient',
             header: ({ column }) => (
               <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
-                <div className="text-xs font-medium">Người lấy mẫu</div>
+                <SortButton column={column}>Người lấy mẫu</SortButton>
                 <DropdownFilter column={column} title="Người lấy mẫu" data={data} />
               </div>
             ),
             cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh31Patient') || ''}</div>,
             size: 110,
-            filterFn: (row, id, value: string[]) => {
-              if (!value || value.length === 0) return false;
-              const cellValue = row.getValue(id) as string;
-              return value.includes(cellValue || '');
-            },
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
           },
         ],
       },
       // TL lỗ và các cột còn lại
       {
         accessorKey: 'lossRatio',
-        header: () => (
-          <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>
+        header: ({ column }) => (
+          <div className="px-2 py-1 bg-pink-100">
+            <SortButton column={column}>Tỉ lệ</SortButton>
+            <NumberFilter column={column} />
+          </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end bg-pink-50">{formatRatio(row.getValue('lossRatio')) || '-'}</div>,
         size: 100,
+        filterFn: (row, id, filter) => numberFilter(row, id, filter),
       },
       {
         accessorKey: 'destinationName',
         header: ({ column }) => (
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="text-xs font-medium">Nơi xuất</div>
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Nơi xuất</SortButton>
             <DropdownFilter column={column} title="Nơi xuất" data={data} />
           </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('destinationName') || '-'}</div>,
         size: 110,
-        filterFn: (row, id, value: string[]) => {
-          if (!value || value.length === 0) return false;
-          const cellValue = row.getValue(id) as string;
-          return value.includes(cellValue || '');
-        },
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
       {
         accessorKey: 'insuranceTypeName',
         header: ({ column }) => (
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="text-xs font-medium">Loại hình</div>
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Loại hình</SortButton>
             <DropdownFilter column={column} title="Loại hình" data={data} />
           </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('insuranceTypeName') || '-'}</div>,
         size: 110,
-        filterFn: (row, id, value: string[]) => {
-          if (!value || value.length === 0) return false;
-          const cellValue = row.getValue(id) as string;
-          return value.includes(cellValue || '');
-        },
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
       {
         accessorKey: 'applyDate',
         header: ({ column }) => (
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="text-xs font-medium">Ngày áp dụng</div>
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Ngày áp dụng</SortButton>
             <DropdownFilter column={column} title="Ngày áp dụng" data={data} />
           </div>
         ),
         cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('applyDate') || '-'}</div>,
         size: 130,
-        filterFn: (row, id, value: string[]) => {
-          if (!value || value.length === 0) return false;
-          const cellValue = row.getValue(id) as string;
-          return value.includes(cellValue || '');
-        },
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
       {
         accessorKey: 'active',
         header: ({ column }) => (
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="text-xs font-medium">Trạng thái</div>
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Trạng thái</SortButton>
             <DropdownFilter column={column} title="Trạng thái" data={data} />
           </div>
         ),
         cell: ({ row }) => (
           <div className="px-3 h-full flex items-center">
             <span
-              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+              className={`inline-flex items-center rounded-full px-3 py-2 text-xs font-medium ${
                 row.getValue('active')
                   ? 'bg-green-50 text-green-700'
                   : 'bg-gray-50 text-gray-700'
@@ -867,7 +954,7 @@ export default function FoodManagementTable() {
       },
       {
         id: 'actions',
-        header: () => <div className="px-3 py-2 text-xs font-medium">Thao tác</div>,
+        header: () => <div className="px-2 py-1 text-xs font-medium">Thao tác</div>,
         cell: ({ row }) => (
           <div className="flex gap-2 px-3 h-full items-center">
             <Button
@@ -966,12 +1053,12 @@ export default function FoodManagementTable() {
           <table className="w-full" style={{ tableLayout: 'auto' }}>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b bg-muted/30 h-8">
+              <tr key={headerGroup.id} className="border-b bg-muted/30 h-6">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
                     colSpan={header.colSpan}
-                    className="text-center text-sm font-medium whitespace-nowrap h-8"
+                    className="text-center text-sm font-medium whitespace-nowrap h-6"
                     style={{ 
                       width: header.column.getSize(),
                       minWidth: header.column.getSize()
