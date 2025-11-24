@@ -126,6 +126,7 @@ type FoodEventPayloadMapping = {
   "food:updateStatus": boolean;
   "food:update": boolean;
   "food:exportImportErrors": boolean;
+  "food:exportTableDataToExcel": boolean;
 };
 
 interface FoodAPI {
@@ -138,4 +139,5 @@ interface FoodAPI {
   updateStatus: (id: number, active: boolean) => Promise<boolean>;
   update: (id: number, data: Partial<FoodWithCategories>) => Promise<boolean>;
   exportImportErrors: (filePath: string, data: any[]) => Promise<boolean>;
+  exportTableDataToExcel: (data: any[], filePath: string) => Promise<boolean>;
 }

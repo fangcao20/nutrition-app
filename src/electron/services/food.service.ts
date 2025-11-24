@@ -90,8 +90,8 @@ export class FoodService {
 
           if (foodData) {
             // Create food record
-              await this.createFoodFromImport(foodData);
-              imported++;
+            await this.createFoodFromImport(foodData);
+            imported++;
           }
         } catch (error) {
           // Try to parse some basic data for error reporting

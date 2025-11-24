@@ -28,6 +28,8 @@ const foodAPI: FoodAPI = {
     ipcInvoke("food:update", id, data),
   exportImportErrors: (filePath: string, data: any[]) =>
     ipcInvoke("food:exportImportErrors", filePath, data),
+  exportTableDataToExcel: (data: any[], filePath: string) =>
+    ipcInvoke("food:exportTableDataToExcel", data, filePath),
 };
 
 const categoryAPI = {

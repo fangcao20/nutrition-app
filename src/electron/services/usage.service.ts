@@ -253,7 +253,7 @@ class UsageService {
         "HH 3.1 - Tỉ lệ": item.hh31Ratio || "",
         "HH 3.1 - Calo": item.hh31Calories || "",
         "HH 3.1 - Người lấy mẫu": item.hh31Patient || "",
-        "Tỉ lệ lỗ": item.lossRatio || "",
+        "Tỉ lệ": item.lossRatio || "",
         "Calo còn lại": item.remainingCalories,
         "Nơi xuất": item.destinationName || "",
         "Loại hình": item.insuranceTypeName || "",

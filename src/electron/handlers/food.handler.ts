@@ -1,6 +1,7 @@
 import { FoodService } from "../services/food.service.js";
 import { ipcHandle } from "../utils.js";
 import type { FoodWithCategories } from "../../../types/food.js";
+import * as XLSX from "xlsx";
 
 export class FoodHandler {
   constructor(private foodService: FoodService) {
@@ -34,6 +35,32 @@ export class FoodHandler {
       "food:exportImportErrors",
       async (event, filePath: string, data: any[]) => {
         return await this.foodService.exportImportErrors(filePath, data);
+      }
+    );
+
+    ipcHandle(
+      "food:exportTableDataToExcel",
+      async (event, data: any[], filePath: string) => {
+        try {
+          // Create worksheet from data
+          const worksheet = XLSX.utils.json_to_sheet(data);
+
+          // Create workbook
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(
+            workbook,
+            worksheet,
+            "Danh sách thực phẩm"
+          );
+
+          // Write file
+          XLSX.writeFile(workbook, filePath);
+
+          return true;
+        } catch (error) {
+          console.error("Error exporting table data to Excel:", error);
+          return false;
+        }
       }
     );
   }

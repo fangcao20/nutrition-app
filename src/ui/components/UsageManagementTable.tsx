@@ -11,8 +11,11 @@ import {
   type ColumnDef,
   type SortingState,
   type ColumnFiltersState,
+  type Row,
 } from '@tanstack/react-table';
-import { Upload, Calculator, Download, X, ArrowUpDown, Save, Trash2 } from 'lucide-react';
+import { Upload, Calculator, Download, X, Save, Trash2 } from 'lucide-react';
+import { SortButton, DropdownFilter, NumberFilter } from './ui/TableFilters';
+import { textFilter, numberFilter } from './ui/TableHelpers';
 import type { 
   UsageInputData, 
   UsageCalculationRow, 
@@ -48,13 +51,27 @@ const formatCalorieUsage = (value: string | number | null | undefined): string =
   return formatRatio(value);
 };
 
+// Helper functions for input table filtering
+const inputTextFilter = (row: Row<UsageInputData>, id: string, value: string[]) => {
+  if (!value || value.length === 0) return false;
+  const cellValue = row.getValue(id);
+  const isEmpty = cellValue === null || cellValue === undefined || cellValue === '';
+  
+  if (value.includes('(Trống)') && isEmpty) return true;
+  if (!isEmpty && value.includes(String(cellValue))) return true;
+  
+  return false;
+}
+
+
+
 // Reusable DataTable component
 function DataTable<T>({ 
   data, 
-  columns 
+  columns
 }: { 
   data: T[], 
-  columns: ColumnDef<T>[] 
+  columns: ColumnDef<T>[]
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -112,12 +129,12 @@ function DataTable<T>({
           <table className="w-full" style={{ tableLayout: 'auto' }}>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b bg-muted/30 h-8">
+              <tr key={headerGroup.id} className="border-b bg-muted/30 h-6">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
                     colSpan={header.colSpan}
-                    className="text-center text-sm font-medium whitespace-nowrap h-8"
+                    className="text-center text-sm font-medium whitespace-nowrap h-6"
                     style={{ 
                       width: header.column.getSize(),
                       minWidth: header.column.getSize()
@@ -219,7 +236,7 @@ export default function UsageManagementTable() {
   const [calculatedData, setCalculatedData] = useState<UsageCalculationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<'select' | 'review' | 'result'>('select');
-  const [calculationResult, setCalculationResult] = useState<UsageCalculationResult | null>(null);
+  const [, setCalculationResult] = useState<UsageCalculationResult | null>(null);
 
   // Calculate error count
   const errorCount = useMemo(() => {
@@ -255,15 +272,10 @@ export default function UsageManagementTable() {
       {
         accessorKey: 'foodId',
         header: ({ column }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="flex-1"
-          >
-            Mã số
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
+          <div className="flex items-center justify-between">
+            <SortButton column={column}>Mã số</SortButton>
+            <DropdownFilter column={column} data={inputData} />
+          </div>
         ),
         cell: ({ row }) => (
           <div className="px-3 h-full flex items-center font-medium">
@@ -271,26 +283,42 @@ export default function UsageManagementTable() {
           </div>
         ),
         size: 80,
+        filterFn: (row, id, value: string[]) => {
+          if (!value || value.length === 0) return false;
+          return value.includes(String(row.getValue(id)));
+        },
       },
       {
         accessorKey: 'originName',
-        header: () => <div className="px-3 py-2 text-xs font-medium">Nơi lấy mẫu</div>,
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Nơi lấy mẫu</SortButton>
+            <DropdownFilter column={column} data={inputData} />
+          </div>
+        ),
         cell: ({ row }) => (
           <div className="px-3 h-full flex items-center">
             {row.getValue('originName')}
           </div>
         ),
         size: 100,
+        filterFn: (row, id, value: string[]) => inputTextFilter(row, id, value),
       },
       {
         accessorKey: 'foodName',
-        header: () => <div className="px-3 py-2 text-xs font-medium">Thực phẩm</div>,
+        header: ({ column }) => (
+          <div className="flex items-center justify-between">
+            <SortButton column={column}>Thực phẩm</SortButton>
+            <DropdownFilter column={column} data={inputData} />
+          </div>
+        ),
         cell: ({ row }) => (
           <div className="px-3 h-full flex items-center">
             {row.getValue('foodName')}
           </div>
         ),
         size: 100,
+        filterFn: (row, id, value: string[]) => inputTextFilter(row, id, value),
       },
       {
         accessorKey: 'unit',
@@ -404,7 +432,7 @@ export default function UsageManagementTable() {
     }
 
     return baseColumns;
-  }, [errorCount, removeRow]);
+  }, [inputData, errorCount, removeRow]);
 
   // Result data table
   const resultColumns = useMemo<ColumnDef<UsageCalculationRow>[]>(() => [
@@ -420,101 +448,163 @@ export default function UsageManagementTable() {
     },
     {
       accessorKey: 'foodId',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Mã số</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between">
+          <SortButton column={column}>Mã số</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center font-medium">
           {row.getValue('foodId')}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, value: string[]) => {
+        if (!value || value.length === 0) return false;
+        return value.includes(String(row.getValue(id)));
+      },
     },
     {
       accessorKey: 'originName',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Nơi lấy mẫu</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1">
+          <SortButton column={column}>Nơi lấy mẫu</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center">
           {row.getValue('originName')}
         </div>
       ),
       size: 130,
+      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
     {
       accessorKey: 'foodName',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Thực phẩm</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between">
+          <SortButton column={column}>Thực phẩm</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center">
           {row.getValue('foodName')}
         </div>
       ),
       size: 120,
+      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
     {
       accessorKey: 'unit',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Đơn vị tính</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1">
+          <SortButton column={column}>Đơn vị tính</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center">
           {row.getValue('unit')}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
     {
       accessorKey: 'value',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Giá trị</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1">
+          <SortButton column={column}>Giá trị</SortButton>
+          <NumberFilter column={column} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center justify-end">
           {(row.getValue('value') as number).toLocaleString()}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, filter) => numberFilter(row, id, filter),
     },
     {
       accessorKey: 'monthYear',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Ngày tháng</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1 bg-orange-100">
+          <SortButton column={column}>Ngày tháng</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center bg-orange-100">
           {row.getValue('monthYear') || '-'}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
     {
       accessorKey: 'quantity',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Số lượng</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1 bg-orange-100">
+          <SortButton column={column}>Số lượng</SortButton>
+          <NumberFilter column={column} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center justify-end bg-orange-100">
           {(row.getValue('quantity') as number).toLocaleString()}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, filter) => numberFilter(row, id, filter),
     },
     {
       accessorKey: 'totalCalories',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-orange-100">Tổng Calo</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1 bg-orange-100">
+          <SortButton column={column}>Tổng Calo</SortButton>
+          <NumberFilter column={column} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center justify-end bg-orange-100 font-medium">
           {(row.getValue('totalCalories') as number).toLocaleString()}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, filter) => numberFilter(row, id, filter),
     },
     {
       id: 'used_calories_group',
-      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
+      header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
       columns: [
         {
           accessorKey: 'usedCalories',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-pink-100">
+              <SortButton column={column}>Tỉ lệ</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-pink-50">
               {formatCalorieUsage(row.getValue('usedCalories') as string | number)}
             </div>
           ),
           size: 120,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'totalUsedCalories',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tổng Calo sử dụng</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-pink-100">
+              <SortButton column={column}>Tổng Calo sử dụng</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => {
             // Calculate totalUsedCalories if not available from data
             // If < 1 (percentage) → multiply with totalCalories, if >= 1 (absolute) → multiply with quantity
@@ -539,247 +629,373 @@ export default function UsageManagementTable() {
             );
           },
           size: 120,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
       ],
     },
     // HH columns group
     {
       id: 'hh_1_1_group',
-      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 1.1</div>,
+      header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 1.1</div>,
       columns: [
         {
           accessorKey: 'hh11Ratio',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Tỉ lệ</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {formatRatio(row.getValue('hh11Ratio') as number)}
             </div>
           ),
           size: 90,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh11Calories',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Calo</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Calo</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {row.getValue('hh11Calories') !== null && row.getValue('hh11Calories') !== undefined ? (row.getValue('hh11Calories') as number).toLocaleString() : ''}
             </div>
           ),
           size: 80,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh11Patient',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Người lấy mẫu</SortButton>
+              <DropdownFilter column={column} data={calculatedData} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh11Patient') || ''}
             </div>
           ),
           size: 110,
+          filterFn: (row, id, value: string[]) => textFilter(row, id, value),
         },
       ],
     },
     // HH 2.1 Group
     {
       id: 'hh_2_1_group',
-      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-green-100">HH 2.1</div>,
+      header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-green-100">HH 2.1</div>,
       columns: [
         {
           accessorKey: 'hh21Ratio',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Tỉ lệ</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+              <SortButton column={column}>Tỉ lệ</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {formatRatio(row.getValue('hh21Ratio') as number)}
             </div>
           ),
           size: 90,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh21Calories',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Calo</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+              <SortButton column={column}>Calo</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {row.getValue('hh21Calories') ? (row.getValue('hh21Calories') as number).toLocaleString() : ''}
             </div>
           ),
           size: 80,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh21Patient',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Người lấy mẫu</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+              <SortButton column={column}>Người lấy mẫu</SortButton>
+              <DropdownFilter column={column} data={calculatedData} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-green-50">
               {row.getValue('hh21Patient') || ''}
             </div>
           ),
           size: 110,
+          filterFn: (row, id, value: string[]) => textFilter(row, id, value),
         },
       ],
     },
     // HH 2.2 Group
     {
       id: 'hh_2_2_group',
-      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 2.2</div>,
+      header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 2.2</div>,
       columns: [
         {
           accessorKey: 'hh22Ratio',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Tỉ lệ</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {formatRatio(row.getValue('hh22Ratio') as number)}
             </div>
           ),
           size: 90,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh22Calories',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Calo</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Calo</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {row.getValue('hh22Calories') ? (row.getValue('hh22Calories') as number).toLocaleString() : ''}
             </div>
           ),
           size: 80,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh22Patient',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Người lấy mẫu</SortButton>
+              <DropdownFilter column={column} data={calculatedData} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh22Patient') || ''}
             </div>
           ),
           size: 110,
+          filterFn: (row, id, value: string[]) => textFilter(row, id, value),
         },
       ],
     },
     // HH 2.3 Group
     {
       id: 'hh_2_3_group',
-      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-green-100">HH 2.3</div>,
+      header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-green-100">HH 2.3</div>,
       columns: [
         {
           accessorKey: 'hh23Ratio',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Tỉ lệ</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+              <SortButton column={column}>Tỉ lệ</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {formatRatio(row.getValue('hh23Ratio') as number)}
             </div>
           ),
           size: 90,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh23Calories',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Calo</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+              <SortButton column={column}>Calo</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-green-50">
               {row.getValue('hh23Calories') ? (row.getValue('hh23Calories') as number).toLocaleString() : ''}
             </div>
           ),
           size: 80,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh23Patient',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-green-100">Người lấy mẫu</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+              <SortButton column={column}>Người lấy mẫu</SortButton>
+              <DropdownFilter column={column} data={calculatedData} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-green-50">
               {row.getValue('hh23Patient') || ''}
             </div>
           ),
           size: 110,
+          filterFn: (row, id, value: string[]) => textFilter(row, id, value),
         },
       ],
     },
     // HH 3.1 Group
     {
       id: 'hh_3_1_group',
-      header: () => <div className="px-3 py-2 text-xs font-semibold text-center bg-yellow-100">HH 3.1</div>,
+      header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 3.1</div>,
       columns: [
         {
           accessorKey: 'hh31Ratio',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Tỉ lệ</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Tỉ lệ</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {formatRatio(row.getValue('hh31Ratio') as number)}
             </div>
           ),
           size: 90,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh31Calories',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Calo</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Calo</SortButton>
+              <NumberFilter column={column} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center justify-end bg-yellow-50">
               {row.getValue('hh31Calories') ? (row.getValue('hh31Calories') as number).toLocaleString() : ''}
             </div>
           ),
           size: 80,
+          filterFn: (row, id, filter) => numberFilter(row, id, filter),
         },
         {
           accessorKey: 'hh31Patient',
-          header: () => <div className="px-3 py-2 text-xs font-medium bg-yellow-100">Người lấy mẫu</div>,
+          header: ({ column }) => (
+            <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+              <SortButton column={column}>Người lấy mẫu</SortButton>
+              <DropdownFilter column={column} data={calculatedData} />
+            </div>
+          ),
           cell: ({ row }) => (
             <div className="px-3 h-full flex items-center bg-yellow-50">
               {row.getValue('hh31Patient') || ''}
             </div>
           ),
           size: 110,
+          filterFn: (row, id, value: string[]) => textFilter(row, id, value),
         },
       ],
     },
     {
       accessorKey: 'lossRatio',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-pink-100">Tỉ lệ</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1 bg-pink-100">
+          <SortButton column={column}>Tỉ lệ</SortButton>
+          <NumberFilter column={column} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center justify-end bg-pink-50">
           {formatRatio(row.getValue('lossRatio') as number)}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, filter) => numberFilter(row, id, filter),
     },
     {
       accessorKey: 'remainingCalories',
-      header: () => <div className="px-3 py-2 text-xs font-medium bg-red-100">Calo còn lại</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1 bg-red-100">
+          <SortButton column={column}>Calo còn lại</SortButton>
+          <NumberFilter column={column} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center justify-end bg-red-50 font-medium">
           {(row.getValue('remainingCalories') as number).toLocaleString()}
         </div>
       ),
       size: 100,
+      filterFn: (row, id, filter) => numberFilter(row, id, filter),
     },
     {
       accessorKey: 'destinationName',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Nơi xuất</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1">
+          <SortButton column={column}>Nơi xuất</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center">
           {row.getValue('destinationName') || '-'}
         </div>
       ),
       size: 110,
+      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
     {
       accessorKey: 'insuranceTypeName',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Loại hình</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1">
+          <SortButton column={column}>Loại hình</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center">
           {row.getValue('insuranceTypeName') || '-'}
         </div>
       ),
       size: 110,
+      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
     {
       accessorKey: 'applyDate',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Ngày áp dụng</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1">
+          <SortButton column={column}>Ngày áp dụng</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center">
           {row.getValue('applyDate') || '-'}
         </div>
       ),
       size: 130,
+      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
     {
       accessorKey: 'active',
-      header: () => <div className="px-3 py-2 text-xs font-medium">Trạng thái</div>,
+      header: ({ column }) => (
+        <div className="flex items-center justify-between px-2 py-1">
+          <SortButton column={column}>Trạng thái</SortButton>
+          <DropdownFilter column={column} data={calculatedData} />
+        </div>
+      ),
       cell: ({ row }) => (
         <div className="px-3 h-full flex items-center">
           <span
@@ -794,8 +1010,16 @@ export default function UsageManagementTable() {
         </div>
       ),
       size: 120,
+      filterFn: (row, id, value: string[]) => {
+        if (!value || value.length === 0) return false;
+        const cellValue = row.getValue(id);
+        const displayValue = cellValue ? 'Hoạt động' : 'Ngừng';
+        if (value.includes('(Trống)') && !cellValue) return true;
+        if (value.includes(displayValue)) return true;
+        return false;
+      },
     },
-  ], []);
+  ], [calculatedData]);
 
   const handleFileImport = useCallback(async () => {
     if (!selectedMonthYear) {
@@ -964,6 +1188,7 @@ export default function UsageManagementTable() {
             />
             <div className="flex-1" />
             <Button 
+              size="sm"
               onClick={handleFileImport}
               disabled={loading || !selectedMonthYear}
               className="flex items-center gap-2"
@@ -992,11 +1217,12 @@ export default function UsageManagementTable() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleReset}>
+              <Button variant="outline" size="sm" onClick={handleReset}>
                 <X className="w-4 h-4 mr-2" />
                 Hủy
               </Button>
               <Button 
+                size="sm"
                 onClick={handleCalculate} 
                 disabled={loading || errorCount > 0}
                 className={errorCount > 0 ? 'opacity-50 cursor-not-allowed' : ''}
@@ -1022,14 +1248,14 @@ export default function UsageManagementTable() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleReset}>
+              <Button variant="outline" size="sm" onClick={handleReset}>
                 Làm mới
               </Button>
-              <Button onClick={handleExportExcel} disabled={loading}>
+              <Button size="sm" onClick={handleExportExcel} disabled={loading}>
                 <Download className="w-4 h-4 mr-2" />
                 {loading ? 'Đang xuất...' : 'Xuất Excel'}
               </Button>
-              <Button onClick={handleSaveToDatabase} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+              <Button size="sm" onClick={handleSaveToDatabase} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
                 <Save className="w-4 h-4 mr-2" />
                 {loading ? 'Đang lưu...' : 'Lưu'}
               </Button>
