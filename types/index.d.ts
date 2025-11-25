@@ -6,6 +6,7 @@
 /// <reference types="./category.d.ts" />
 /// <reference types="./dialog.d.ts" />
 /// <reference types="./usage.d.ts" />
+/// <reference types="./report.d.ts" />
 
 // Re-export all types for explicit imports when needed
 export * from "./food";
@@ -13,6 +14,7 @@ export * from "./common";
 export * from "./category";
 export * from "./dialog";
 export * from "./usage";
+export * from "./report";
 
 // This empty export makes this file a module
 export {};

@@ -1,6 +1,9 @@
 import { FoodAPI, FoodEventPayloadMapping } from "./food";
 import { CategoryAPI, CategoryEventPayloadMapping } from "./category";
 import { UsageAPI, UsageEventPayloadMapping } from "./usage";
+import { ReportAPI, ReportEventPayloadMapping } from "./report";
+import { AnalysisAPI, AnalysisEventPayloadMapping } from "./analysis";
+import { DialogAPI, DialogEventPayloadMapping } from "./dialog";
 
 export interface DatabaseResult<T = unknown> {
   success: boolean;
@@ -70,15 +73,9 @@ export type EventPayloadMapping = FoodEventPayloadMapping &
   CategoryEventPayloadMapping &
   UsageEventPayloadMapping &
   DialogEventPayloadMapping &
-  UpdateEventPayloadMapping;
-
-export interface UpdateAPI {
-  onUpdateAvailable: (callback: (info: any) => void) => void;
-  onUpdateProgress: (callback: (progress: any) => void) => void;
-  onUpdateDownloaded: (callback: () => void) => void;
-  downloadUpdate: () => Promise<UpdateEventPayloadMapping["update:download"]>;
-  installUpdate: () => Promise<UpdateEventPayloadMapping["update:install"]>;
-}
+  UpdateEventPayloadMapping &
+  ReportEventPayloadMapping &
+  AnalysisEventPayloadMapping;
 
 export interface ElectronAPI {
   food: FoodAPI;
@@ -86,12 +83,6 @@ export interface ElectronAPI {
   usage: UsageAPI;
   dialog: DialogAPI;
   update: UpdateAPI;
+  report: ReportAPI;
+  analysis: AnalysisAPI;
 }
-
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI;
-  }
-}
-
-export {};

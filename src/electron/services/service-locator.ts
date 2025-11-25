@@ -2,9 +2,12 @@ import { databaseManager } from "../database/database-manager.js";
 import { FoodRepository } from "../repositories/food.repository.js";
 import { CategoryRepository } from "../repositories/category.repository.js";
 import UsageRepository from "../repositories/usage.repository.js";
+import { ReportRepository } from "../repositories/report.repository.js";
 import { FoodService } from "./food.service.js";
 import { CategoryService } from "./category.service.js";
 import { UsageService } from "./usage.service.js";
+import { ReportService } from "./report.service.js";
+import { AnalysisService } from "./analysis.service.js";
 
 export class ServiceLocator {
   private static instance: ServiceLocator;
@@ -30,16 +33,21 @@ export class ServiceLocator {
     const foodRepository = new FoodRepository(db);
     const categoryRepository = new CategoryRepository(db);
     const usageRepository = new UsageRepository(db);
+    const reportRepository = new ReportRepository(db);
 
     // Create services
     const foodService = new FoodService(foodRepository, categoryRepository);
     const categoryService = new CategoryService(categoryRepository);
     const usageService = new UsageService(usageRepository);
+    const reportService = new ReportService(reportRepository);
+    const analysisService = new AnalysisService(reportRepository);
 
     // Register services
     this.services.set("food", foodService);
     this.services.set("category", categoryService);
     this.services.set("usage", usageService);
+    this.services.set("report", reportService);
+    this.services.set("analysis", analysisService);
 
     this.isInitialized = true;
     console.log("✅ Service locator initialized");

@@ -1,4 +1,4 @@
-interface DialogAPI {
+export interface DialogAPI {
   showOpenDialog: (options: any) => Promise<{
     canceled: boolean;
     filePaths: string[];
@@ -9,7 +9,7 @@ interface DialogAPI {
   }>;
 }
 
-type DialogEventPayloadMapping = {
+export type DialogEventPayloadMapping = {
   "dialog:showOpenDialog": {
     canceled: boolean;
     filePaths: string[];

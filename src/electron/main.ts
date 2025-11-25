@@ -10,6 +10,8 @@ import { DialogHandler } from "./handlers/dialog.handler.js";
 import { CategoryHandler } from "./handlers/category.handler.js";
 import { UsageHandler } from "./handlers/usage.handler.js";
 import { UpdateHandler } from "./handlers/update.handler.js";
+import { ReportHandler } from "./handlers/report.handler.js";
+import { AnalysisHandler } from "./handlers/analysis.handler.js";
 import { getPreloadPath } from "./pathResolver.js";
 
 // Initialize database and handlers
@@ -29,6 +31,8 @@ async function initializeApp() {
     new CategoryHandler(serviceLocator.get("category"));
     new UsageHandler(serviceLocator.get("usage"));
     new UpdateHandler();
+    new ReportHandler(serviceLocator.get("report"));
+    new AnalysisHandler(serviceLocator.get("analysis"));
 
     console.log("✅ App initialization complete");
   } catch (error) {

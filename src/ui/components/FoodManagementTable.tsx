@@ -515,7 +515,7 @@ export default function FoodManagementTable() {
         cell: ({ row }) => (
           <div className="px-3 h-full flex items-center">
             <span
-              className={`inline-flex items-center rounded-full px-3 py-2 text-xs font-medium ${
+              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                 row.getValue('active')
                   ? 'bg-green-50 text-green-700'
                   : 'bg-gray-50 text-gray-700'
@@ -537,7 +537,7 @@ export default function FoodManagementTable() {
         id: 'actions',
         header: () => <div className="px-2 py-1 text-xs font-medium">Thao tác</div>,
         cell: ({ row }) => (
-          <div className="flex gap-2 px-3 h-full items-center">
+          <div className="flex gap-2 px-2 h-full items-center">
             <Button
               variant="ghost"
               size="icon"
@@ -697,7 +697,7 @@ export default function FoodManagementTable() {
 
       {/* Pagination */}
       <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
+        <div className="text-xs text-muted-foreground">
           Hiển thị <strong>{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} đến{' '}
           {Math.min(
             (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
