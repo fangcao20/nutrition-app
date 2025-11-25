@@ -16,7 +16,8 @@
     "target": "dmg"
   },
   "win": {
-    "target": ["portable", "msi"]
+    "target": "portable",
+    "signAndEditExecutable": false
   },
   "linux": {
     "target": "AppImage",
