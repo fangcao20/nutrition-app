@@ -1,7 +1,7 @@
 {
   "name": "nutrition-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -18,12 +18,13 @@
     "clean:db": "tsx scripts/clean-database.ts",
     "clean:db:dev": "tsx scripts/clean-database.ts dev",
     "clean:db:prod": "tsx scripts/clean-database.ts prod",
+    "release": "standard-version",
     "dist:mac": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --mac --arm64",
     "dist:win": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --win --x64",
     "dist:linux": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --linux --x64",
-    "publish:mac": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --mac --arm64 --publish=always",
-    "publish:win": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --win --x64 --publish=always",
-    "publish:linux": "cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --linux --x64 --publish=always"
+    "publish:mac": "npm run release && cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --mac --arm64 --publish=always",
+    "publish:win": "npm run release && cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --win --x64 --publish=always",
+    "publish:linux": "npm run release && cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron && electron-builder --linux --x64 --publish=always"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
@@ -61,6 +62,7 @@
     "globals": "^16.4.0",
     "npm-run-all": "^4.1.5",
     "postcss": "^8.4.35",
+    "standard-version": "^9.5.0",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.20.6",
     "typescript": "~5.9.3",
