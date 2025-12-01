@@ -1,6 +1,7 @@
-import { useState, Component, ReactNode } from 'react';
+import { useState, Component, ReactNode, useEffect } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { UpdateNotification } from './components/UpdateNotification';
+import { FoodPreviewProvider, useFoodPreview } from './components/FoodPreviewContext';
 import SettingsPage from './pages/SettingsPage';
 import UsagePage from './pages/UsagePage';
 import CategoriesPage from './pages/CategoriesPage';
@@ -31,63 +32,89 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-function App() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState<string>(() => {
     return localStorage.getItem('activeTab') || 'settings';
   });
+
+  const { previewData } = useFoodPreview();
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     localStorage.setItem('activeTab', value);
   };
 
+  // Add beforeunload listener for unsaved preview data
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (previewData && previewData.length > 0) {
+        e.preventDefault();
+        e.returnValue = 'Bạn có dữ liệu preview thực phẩm chưa lưu. Bạn có chắc muốn thoát?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [previewData]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto py-6">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-foreground">
-            Nutrition
-          </h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              Nutrition
+            </h1>
+          </div>
+
+          {/* Main Content */}
+          <ErrorBoundary>
+            <Tabs value={activeTab} onValueChange={handleTabChange}>
+              <TabsList className="mb-6">
+                <TabsTrigger value="settings">Cài đặt</TabsTrigger>
+                <TabsTrigger value="categories">Danh mục</TabsTrigger>
+                <TabsTrigger value="usage">Sử dụng</TabsTrigger>
+                <TabsTrigger value="history">Lịch sử</TabsTrigger>
+                <TabsTrigger value="reports">Báo cáo</TabsTrigger>
+                <TabsTrigger value="analysis">Phân tích</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <div className={activeTab === 'settings' ? 'block' : 'hidden'}>
+              <SettingsPage />
+            </div>
+            <div className={activeTab === 'categories' ? 'block' : 'hidden'}>
+              <CategoriesPage />
+            </div>
+            <div className={activeTab === 'usage' ? 'block' : 'hidden'}>
+              <UsagePage />
+            </div>
+            <div className={activeTab === 'history' ? 'block' : 'hidden'}>
+              <HistoryPage />
+            </div>
+            <div className={activeTab === 'reports' ? 'block' : 'hidden'}>
+              <ReportsPage />
+            </div>
+            <div className={activeTab === 'analysis' ? 'block' : 'hidden'}>
+              <AnalysisPage />
+            </div>
+          </ErrorBoundary>
         </div>
-
-        {/* Main Content */}
-        <ErrorBoundary>
-          <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className="mb-6">
-              <TabsTrigger value="settings">Cài đặt</TabsTrigger>
-              <TabsTrigger value="categories">Danh mục</TabsTrigger>
-              <TabsTrigger value="usage">Sử dụng</TabsTrigger>
-              <TabsTrigger value="history">Lịch sử</TabsTrigger>
-              <TabsTrigger value="reports">Báo cáo</TabsTrigger>
-              <TabsTrigger value="analysis">Phân tích</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          <div className={activeTab === 'settings' ? 'block' : 'hidden'}>
-            <SettingsPage />
-          </div>
-          <div className={activeTab === 'categories' ? 'block' : 'hidden'}>
-            <CategoriesPage />
-          </div>
-          <div className={activeTab === 'usage' ? 'block' : 'hidden'}>
-            <UsagePage />
-          </div>
-          <div className={activeTab === 'history' ? 'block' : 'hidden'}>
-            <HistoryPage />
-          </div>
-          <div className={activeTab === 'reports' ? 'block' : 'hidden'}>
-            <ReportsPage />
-          </div>
-          <div className={activeTab === 'analysis' ? 'block' : 'hidden'}>
-            <AnalysisPage />
-          </div>
-        </ErrorBoundary>
+        
+        {/* Update notification */}
+        <UpdateNotification />
       </div>
-      
-      {/* Update notification */}
-      <UpdateNotification />
-    </div>
+    );
+}
+
+function App() {
+  return (
+    <FoodPreviewProvider>
+      <AppContent />
+    </FoodPreviewProvider>
   );
 }
 

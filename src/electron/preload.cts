@@ -24,6 +24,9 @@ const foodAPI: FoodAPI = {
   getAll: () => ipcInvoke("food:getAll"),
   importFromExcel: (filePath: string) =>
     ipcInvoke("food:importFromExcel", filePath),
+  parseExcelForPreview: (filePath: string) =>
+    ipcInvoke("food:parseExcelForPreview", filePath),
+  importFromData: (data: any[]) => ipcInvoke("food:importFromData", data),
   updateStatus: (id: number, active: boolean) =>
     ipcInvoke("food:updateStatus", id, active),
   update: (id: number, data: Partial<FoodWithCategories>) =>
@@ -32,6 +35,7 @@ const foodAPI: FoodAPI = {
     ipcInvoke("food:exportImportErrors", filePath, data),
   exportTableDataToExcel: (data: any[], filePath: string) =>
     ipcInvoke("food:exportTableDataToExcel", data, filePath),
+  deleteAll: () => ipcInvoke("food:deleteAll"),
 };
 
 const categoryAPI = {

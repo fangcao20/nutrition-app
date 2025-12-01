@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent } from '../ui/card';
 import DataTable from '../ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
@@ -31,20 +31,21 @@ export default function AnalysisByFood() {
   });
   const [data, setData] = useState<AnalysisFoodRow[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!fromMonthYear || !toMonthYear) return;
-      if (!window.electronAPI) return setData([]);
-      try {
-        const result = await window.electronAPI.analysis.getFoodAnalysis({ fromMonthYear, toMonthYear });
-        if (result.success) setData(result.data);
-        else setData([]);
-      } catch (error) {
-        console.error('Error loading food analysis', error);
-      }
-    };
-    load();
+  const loadData = useCallback(async () => {
+    if (!fromMonthYear || !toMonthYear) return;
+    if (!window.electronAPI) return setData([]);
+    try {
+      const result = await window.electronAPI.analysis.getFoodAnalysis({ fromMonthYear, toMonthYear });
+      if (result.success) setData(result.data);
+      else setData([]);
+    } catch (error) {
+      console.error('Error loading food analysis', error);
+    }
   }, [fromMonthYear, toMonthYear]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleExportExcel = async () => {
     if (!window.electronAPI || data.length === 0) return;
@@ -229,16 +230,21 @@ export default function AnalysisByFood() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-md font-medium">Phân tích Thực phẩm</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportExcel}
-                disabled={data.length === 0}
-                className="flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Xuất Excel
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={loadData}>
+                  Đồng bộ
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportExcel}
+                  disabled={data.length === 0}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Xuất Excel
+                </Button>
+              </div>
             </div>
             <div className="max-w-6xl">
               <DataTable

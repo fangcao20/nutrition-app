@@ -18,8 +18,14 @@ export class UsageHandler {
       this.handleExportNotFound.bind(this)
     );
     ipcMain.handle("usage:exportToExcel", this.handleExportToExcel.bind(this));
-    ipcMain.handle("usage:saveUsageRecords", this.handleSaveUsageRecords.bind(this));
-    ipcMain.handle("usage:getUsageHistory", this.handleGetUsageHistory.bind(this));
+    ipcMain.handle(
+      "usage:saveUsageRecords",
+      this.handleSaveUsageRecords.bind(this)
+    );
+    ipcMain.handle(
+      "usage:getUsageHistory",
+      this.handleGetUsageHistory.bind(this)
+    );
 
     console.log("✅ Usage handlers registered");
   }

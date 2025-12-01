@@ -17,6 +17,14 @@ export class FoodHandler {
       return await this.foodService.importFromExcel(filePath);
     });
 
+    ipcHandle("food:parseExcelForPreview", async (event, filePath: string) => {
+      return await this.foodService.parseExcelForPreview(filePath);
+    });
+
+    ipcHandle("food:importFromData", async (event, data: any[]) => {
+      return await this.foodService.importFromData(data);
+    });
+
     ipcHandle(
       "food:updateStatus",
       async (event, id: number, active: boolean) => {
@@ -63,5 +71,9 @@ export class FoodHandler {
         }
       }
     );
+
+    ipcHandle("food:deleteAll", async () => {
+      return await this.foodService.deleteAllFoods();
+    });
   }
 }

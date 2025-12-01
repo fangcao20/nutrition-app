@@ -164,17 +164,13 @@ class UsageService {
         LEFT JOIN origins o ON f.origin_id = o.id
         LEFT JOIN food_names fn ON f.food_name_id = fn.id
         LEFT JOIN units u ON f.unit_id = u.id
-        WHERE f.food_id = ? 
-          AND o.name = ?
-          AND fn.name = ?
-          AND u.name = ?
-          AND f.calorie_per_unit = ?
+        WHERE f.food_id = ?
           AND f.active = 1
       `;
 
       const foodRecord = db
         .prepare(foodQuery)
-        .get(row.foodId, row.originName, row.foodName, row.unit, row.value) as
+        .get(row.foodId) as
         | {
             id: number;
             hh_3_1_patient: string;
@@ -187,27 +183,7 @@ class UsageService {
 
       if (!foodRecord) {
         hasError = true;
-        errorMessage = "Không tìm thấy thông tin thực phẩm trong cơ sở dữ liệu";
-      } else {
-        // Check if HH 3.1 matches
-        if (row.hh31Patient && foodRecord.hh_3_1_patient !== row.hh31Patient) {
-          hasError = true;
-          errorMessage = `HH 3.1 không khớp. DB: "${
-            foodRecord.hh_3_1_patient || ""
-          }", Excel: "${row.hh31Patient}"`;
-        }
-
-        // Check if destination matches
-        if (
-          row.destinationName &&
-          foodRecord.destination_name !== row.destinationName
-        ) {
-          if (errorMessage) errorMessage += "; ";
-          hasError = true;
-          errorMessage += `Nơi xuất không khớp. DB: "${
-            foodRecord.destination_name || ""
-          }", Excel: "${row.destinationName}"`;
-        }
+        errorMessage = "Không tìm thấy thông tin thực phẩm trong cơ sở dữ liệu.";
       }
 
       return {

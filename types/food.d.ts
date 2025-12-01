@@ -123,6 +123,17 @@ type FoodEventPayloadMapping = {
     imported: number;
     errors: ImportError[];
   };
+  "food:parseExcelForPreview": {
+    success: boolean;
+    data: any[];
+    errors: ImportError[];
+  };
+  "food:importFromData": {
+    success: boolean;
+    imported: number;
+    errors: ImportError[];
+  };
+  "food:deleteAll": boolean;
   "food:updateStatus": boolean;
   "food:update": boolean;
   "food:exportImportErrors": boolean;
@@ -136,6 +147,17 @@ interface FoodAPI {
     imported: number;
     errors: ImportError[];
   }>;
+  parseExcelForPreview: (filePath: string) => Promise<{
+    success: boolean;
+    data: any[];
+    errors: ImportError[];
+  }>;
+  importFromData: (data: any[]) => Promise<{
+    success: boolean;
+    imported: number;
+    errors: ImportError[];
+  }>;
+  deleteAll: () => Promise<boolean>;
   updateStatus: (id: number, active: boolean) => Promise<boolean>;
   update: (id: number, data: Partial<FoodWithCategories>) => Promise<boolean>;
   exportImportErrors: (filePath: string, data: any[]) => Promise<boolean>;

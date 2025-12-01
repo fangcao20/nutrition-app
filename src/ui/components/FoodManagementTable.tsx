@@ -12,13 +12,14 @@ import {
 } from '@tanstack/react-table';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Edit, X,  Upload, Power, Download } from 'lucide-react';
+import { Edit, X, Upload, Power, Download, Check, AlertTriangle, Trash2 } from 'lucide-react';
 import { formatNumber } from '../lib/utils';
 import FoodLossEditorModal from './EditFoodModal';
 // Import shared components instead of using local definitions
 import { SortButton, DropdownFilter, NumberFilter } from './ui/TableFilters';
 import { textFilter, numberFilter } from './ui/TableHelpers';
-import type { FoodWithCategories, ImportError } from '../../../types/food';
+import { useFoodPreview } from './FoodPreviewContext';
+import type { FoodWithCategories, ImportError, CreateFoodRequest } from '../../../types/food';
 
 // Format ratio values: if < 1 show as percentage with 2 decimal places
 const formatRatio = (value: string | null | undefined): string => {
@@ -44,6 +45,12 @@ export default function FoodManagementTable() {
   const [isLossModalOpen, setIsLossModalOpen] = useState(false);
   const [importErrors, setImportErrors] = useState<ImportError[]>([]);
   const [showImportErrors, setShowImportErrors] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [previewSorting, setPreviewSorting] = useState<SortingState>([]);
+  const [previewColumnFilters, setPreviewColumnFilters] = useState<ColumnFiltersState>([]);
+  const [previewGlobalFilter, setPreviewGlobalFilter] = useState('');
+
+  const { previewData, setPreviewData, clearPreviewData, hasUnsavedData } = useFoodPreview();
 
   const loadFoods = useCallback(async () => {
     try {
@@ -65,6 +72,31 @@ export default function FoodManagementTable() {
       setLoading(false);
     }
   }, []);
+
+  const handleDeleteAllRealData = useCallback(async () => {
+    if (!confirm('Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu thực phẩm trong database? Hành động này không thể hoàn tác.')) return;
+    try {
+      setLoading(true);
+      const success = await window.electronAPI.food.deleteAll();
+      if (success) {
+        alert('Đã xóa toàn bộ dữ liệu thực phẩm.');
+        // Reload table data
+        await loadFoods();
+        // Also clear any preview data to avoid confusion
+        clearPreviewData();
+        setIsPreviewMode(false);
+        setImportErrors([]);
+        setShowImportErrors(false);
+      } else {
+        alert('Không thể xóa dữ liệu. Vui lòng thử lại.');
+      }
+    } catch (error) {
+      console.error('Error deleting all foods:', error);
+      alert('Lỗi khi xóa dữ liệu');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadFoods, clearPreviewData]);
 
   // Load data on component mount
   useEffect(() => {
@@ -152,7 +184,45 @@ export default function FoodManagementTable() {
     }
   }, [selectedFood, loadFoods]);
 
-  const handleImportExcel = async () => {
+  const handleConfirmImport = async () => {
+    try {
+      setLoading(true);
+      const importResult = await window.electronAPI.food.importFromData(previewData);
+      
+      if (importResult.success) {
+        alert(`🎉 Import thành công! Đã import ${importResult.imported} dòng dữ liệu.`);
+        // Reload data
+        await loadFoods();
+        // Clear preview
+        clearPreviewData();
+        setIsPreviewMode(false);
+        setImportErrors([]);
+        setShowImportErrors(false);
+      } else {
+        setImportErrors(importResult.errors);
+        setShowImportErrors(true);
+        alert(`❌ Import thất bại. ${importResult.errors.length} dòng bị lỗi. Xem chi tiết trong bảng lỗi.`);
+      }
+    } catch (error) {
+      console.error('Error confirming import:', error);
+      alert('Lỗi khi import dữ liệu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelPreview = () => {
+    clearPreviewData();
+    setIsPreviewMode(false);
+    setImportErrors([]);
+    setShowImportErrors(false);
+  };
+
+  const removePreviewRow = useCallback((index: number) => {
+    setPreviewData((prev: CreateFoodRequest[]) => prev.filter((_, i) => i !== index));
+  }, [setPreviewData]);
+
+  const handleImportExcel = useCallback(async () => {
     try {
       setLoading(true);
       const result = await window.electronAPI.dialog.showOpenDialog({
@@ -166,35 +236,18 @@ export default function FoodManagementTable() {
 
       if (!result.canceled && result.filePaths.length > 0) {
         const filePath = result.filePaths[0];
-        const importResult = await window.electronAPI.food.importFromExcel(filePath);
+        const parseResult = await window.electronAPI.food.parseExcelForPreview(filePath);
         
-        if (importResult.success) {
-          alert(`🎉 Import thành công! Đã import ${importResult.imported} dòng dữ liệu.`);
-          // Reload data
-          await loadFoods();
-          // Clear any previous errors
-          setImportErrors([]);
-          setShowImportErrors(false);
+        if (parseResult.success) {
+          setPreviewData(parseResult.data);
+          setIsPreviewMode(true);
+          setImportErrors(parseResult.errors);
+          setShowImportErrors(parseResult.errors.length > 0);
         } else {
-          // Show errors in table instead of alert
-          setImportErrors(importResult.errors);
+          setImportErrors(parseResult.errors);
           setShowImportErrors(true);
-          
-          // More informative summary message
-          const successMsg = importResult.imported > 0 
-            ? `✅ Import thành công ${importResult.imported} dòng` 
-            : '';
-          const errorMsg = `❌ ${importResult.errors.length} dòng bị lỗi`;
-          const combinedMsg = successMsg 
-            ? `${successMsg}, ${errorMsg.toLowerCase()}. Xem chi tiết lỗi trong bảng bên dưới.`
-            : `${errorMsg}. Xem chi tiết lỗi trong bảng bên dưới.`;
-          
-          alert(combinedMsg);
-          
-          // Still reload data to show imported items
-          if (importResult.imported > 0) {
-            await loadFoods();
-          }
+          // Keep only the error alert so user knows parsing failed
+          alert(`❌ Lỗi khi đọc file: ${parseResult.errors[0]?.error || 'Lỗi không xác định'}`);
         }
       }
     } catch (error) {
@@ -203,7 +256,7 @@ export default function FoodManagementTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setPreviewData, setIsPreviewMode, setImportErrors, setShowImportErrors]);
 
   const columns = useMemo<ColumnDef<FoodWithCategories>[]>(
     () => [
@@ -246,18 +299,7 @@ export default function FoodManagementTable() {
         size: 120,
         filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
-      {
-        accessorKey: 'unit',
-        header: ({ column }) => (
-          <div className="flex items-center justify-between px-2 py-1">
-            <SortButton column={column}>Đơn vị tính</SortButton>
-            <DropdownFilter column={column} title="Đơn vị tính" data={data} />
-          </div>
-        ),
-        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('unit')}</div>,
-        size: 100,
-        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
-      },
+      // `unit` column removed as requested
       {
         accessorKey: 'caloriePerUnit',
         header: ({ column }) => (
@@ -568,6 +610,340 @@ export default function FoodManagementTable() {
     [data, handleDeactivateFood]
   );
 
+  const previewColumns = useMemo<ColumnDef<CreateFoodRequest>[]>(
+    () => [
+      {
+        id: 'stt',
+        header: () => <div className="px-3 py-2 text-xs font-medium">STT</div>,
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center">{row.index + 1}</div>
+        ),
+        size: 50,
+      },
+      {
+        accessorKey: 'foodId',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between">
+            <SortButton column={column}>Mã số</SortButton>
+            <DropdownFilter column={column} title="Mã số" data={previewData} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="font-medium px-3 h-full flex items-center">{row.getValue('foodId')}</div>,
+        size: 100,
+        filterFn: (row, id, value: string[]) => {
+          if (!value || value.length === 0) return false;
+          return value.includes(String(row.getValue(id)));
+        },
+      },
+      {
+        accessorKey: 'originName',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Nơi lấy mẫu</SortButton>
+            <DropdownFilter column={column} title="Nơi lấy mẫu" data={previewData} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('originName') || '-'}</div>,
+        size: 130,
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+      },
+      {
+        accessorKey: 'foodName',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between">
+            <SortButton column={column}>Thực phẩm</SortButton>
+            <DropdownFilter column={column} title="Thực phẩm" data={previewData} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('foodName')}</div>,
+        size: 120,
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+      },
+      // `unit` column removed from preview table as requested
+      {
+        accessorKey: 'caloriePerUnit',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Giá trị</SortButton>
+            <NumberFilter column={column} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end">{formatNumber(row.getValue('caloriePerUnit'))}</div>,
+        size: 100,
+        filterFn: (row, id, filter) => numberFilter(row, id, filter),
+      },
+      // Calo sử dụng Group
+      {
+        id: 'calorie_usage_group',
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-pink-100">Calo sử dụng</div>,
+        columns: [
+          {
+            accessorKey: 'calorieUsage',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-pink-100">
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
+              </div>
+            ),
+            cell: ({ row }) => {
+              const value = row.getValue('calorieUsage') as number | string | null;
+              let display: string;
+              if (typeof value === 'number') {
+                display = formatRatio(String(value));
+              } else if (value) {
+                display = formatRatio(String(value));
+              } else {
+                display = '-';
+              }
+              return <div className="px-3 h-full flex items-center justify-end bg-pink-50">{display}</div>;
+            },
+            size: 120,
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
+          },
+        ],
+      },
+      // HH and grouped columns copied from main table but using previewData for DropdownFilter
+      {
+        id: 'hh_1_1_group',
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 1.1</div>,
+        columns: [
+          {
+            accessorKey: 'hh11Ratio',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh11Ratio'))}</div>,
+            size: 90,
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
+          },
+          {
+            accessorKey: 'hh11Patient',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+                <SortButton column={column}>Người lấy mẫu</SortButton>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={previewData} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-yellow-50 px-2 h-full flex items-center">{row.getValue('hh11Patient') || ''}</div>,
+            size: 110,
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+          },
+        ],
+      },
+      {
+        id: 'hh_2_1_group',
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-green-100">HH 2.1</div>,
+        columns: [
+          {
+            accessorKey: 'hh21Ratio',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh21Ratio'))}</div>,
+            size: 90,
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
+          },
+          {
+            accessorKey: 'hh21Patient',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+                <SortButton column={column}>Người lấy mẫu</SortButton>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={previewData} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh21Patient') || ''}</div>,
+            size: 110,
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+          },
+        ],
+      },
+      {
+        id: 'hh_2_2_group',
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 2.2</div>,
+        columns: [
+          {
+            accessorKey: 'hh22Ratio',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh22Ratio'))}</div>,
+            size: 90,
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
+          },
+          {
+            accessorKey: 'hh22Patient',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+                <SortButton column={column}>Người lấy mẫu</SortButton>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={previewData} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh22Patient') || ''}</div>,
+            size: 110,
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+          },
+        ],
+      },
+      {
+        id: 'hh_2_3_group',
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-green-100">HH 2.3</div>,
+        columns: [
+          {
+            accessorKey: 'hh23Ratio',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh23Ratio'))}</div>,
+            size: 90,
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
+          },
+          {
+            accessorKey: 'hh23Patient',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-green-100">
+                <SortButton column={column}>Người lấy mẫu</SortButton>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={previewData} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-green-50 px-3 h-full flex items-center">{row.getValue('hh23Patient') || ''}</div>,
+            size: 110,
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+          },
+        ],
+      },
+      {
+        id: 'hh_3_1_group',
+        header: () => <div className="px-2 py-1 text-xs font-semibold text-center bg-yellow-100">HH 3.1</div>,
+        columns: [
+          {
+            accessorKey: 'hh31Ratio',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+                <SortButton column={column}>Tỉ lệ</SortButton>
+                <NumberFilter column={column} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center justify-end">{formatRatio(row.getValue('hh31Ratio'))}</div>,
+            size: 90,
+            filterFn: (row, id, filter) => numberFilter(row, id, filter),
+          },
+          {
+            accessorKey: 'hh31Patient',
+            header: ({ column }) => (
+              <div className="flex items-center justify-between px-2 py-1 bg-yellow-100">
+                <SortButton column={column}>Người lấy mẫu</SortButton>
+                <DropdownFilter column={column} title="Người lấy mẫu" data={previewData} />
+              </div>
+            ),
+            cell: ({ row }) => <div className="bg-yellow-50 px-3 h-full flex items-center">{row.getValue('hh31Patient') || ''}</div>,
+            size: 110,
+            filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+          },
+        ],
+      },
+      {
+        accessorKey: 'lossRatio',
+        header: ({ column }) => (
+          <div className="px-2 py-1 bg-pink-100">
+            <SortButton column={column}>Tỉ lệ</SortButton>
+            <NumberFilter column={column} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="px-3 h-full flex items-center justify-end bg-pink-50">{formatRatio(row.getValue('lossRatio')) || '-'}</div>,
+        size: 100,
+        filterFn: (row, id, filter) => numberFilter(row, id, filter),
+      },
+      {
+        accessorKey: 'destinationName',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Nơi xuất</SortButton>
+            <DropdownFilter column={column} title="Nơi xuất" data={previewData} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('destinationName') || '-'}</div>,
+        size: 110,
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+      },
+      {
+        accessorKey: 'insuranceTypeName',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Loại hình</SortButton>
+            <DropdownFilter column={column} title="Loại hình" data={previewData} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('insuranceTypeName') || '-'}</div>,
+        size: 110,
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+      },
+      {
+        accessorKey: 'applyDate',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Ngày áp dụng</SortButton>
+            <DropdownFilter column={column} title="Ngày áp dụng" data={previewData} />
+          </div>
+        ),
+        cell: ({ row }) => <div className="px-3 h-full flex items-center">{row.getValue('applyDate') || '-'}</div>,
+        size: 130,
+        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
+      },
+      {
+        accessorKey: 'active',
+        header: ({ column }) => (
+          <div className="flex items-center justify-between px-2 py-1">
+            <SortButton column={column}>Trạng thái</SortButton>
+            <DropdownFilter column={column} title="Trạng thái" data={previewData} />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="px-3 h-full flex items-center">
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                row.getValue('active') ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-700'
+              }`}
+            >
+              {row.getValue('active') ? 'Hoạt động' : 'Ngừng'}
+            </span>
+          </div>
+        ),
+        size: 120,
+        filterFn: (row, id, value: string[]) => {
+          if (!value || value.length === 0) return false;
+          const cellValue = row.getValue(id) as boolean;
+          const displayValue = cellValue ? 'Hoạt động' : 'Ngừng';
+          return value.includes(displayValue);
+        },
+      },
+      {
+        id: 'actions',
+        header: () => <div className="px-2 py-1 text-xs font-medium">Thao tác</div>,
+        cell: ({ row }) => (
+          <div className="flex gap-2 px-2 h-full items-center">
+            <Button variant="ghost" size="icon" onClick={() => removePreviewRow(row.index)} title="Xóa dòng này">
+              <X className="h-4 w-4 text-red-500" />
+            </Button>
+          </div>
+        ),
+        size: 120,
+      },
+    ],
+    [previewData, removePreviewRow]
+  );
+
   const table = useReactTable({
     data,
     columns,
@@ -590,23 +966,83 @@ export default function FoodManagementTable() {
     },
   });
 
+  const previewTable = useReactTable({
+    data: previewData,
+    columns: previewColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setPreviewSorting,
+    onColumnFiltersChange: setPreviewColumnFilters,
+    onGlobalFilterChange: setPreviewGlobalFilter,
+    state: {
+      sorting: previewSorting,
+      columnFilters: previewColumnFilters,
+      globalFilter: previewGlobalFilter,
+    },
+    initialState: {
+      pagination: {
+        pageSize: 15,
+      },
+    },
+  });
+
   return (
     <div className="space-y-4">
+      {/* Preview Mode Banner */}
+      {isPreviewMode && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-blue-600" />
+              <span className="text-sm text-blue-700">
+                Đang import {previewData.length} dòng dữ liệu. {importErrors.length > 0 && `${importErrors.length} lỗi.`}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCancelPreview}
+                disabled={loading}
+              >
+                <X className="w-4 h-4" />
+                Hủy
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirmImport}
+                disabled={loading || previewData.length === 0}
+              >
+                <Check className="w-4 h-4" />
+                {loading ? 'Đang import...' : 'Xác nhận Import'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Controls Row */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Input
             placeholder="Tìm kiếm..."
-            value={globalFilter ?? ''}
-            onChange={(e) => setGlobalFilter(e.target.value)}
+            value={isPreviewMode ? (previewGlobalFilter ?? '') : (globalFilter ?? '')}
+            onChange={(e) => isPreviewMode ? setPreviewGlobalFilter(e.target.value) : setGlobalFilter(e.target.value)}
             className="max-w-sm"
           />
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              setGlobalFilter('');
-              setColumnFilters([]);
+              if (isPreviewMode) {
+                setPreviewGlobalFilter('');
+                setPreviewColumnFilters([]);
+              } else {
+                setGlobalFilter('');
+                setColumnFilters([]);
+              }
             }}
             className="whitespace-nowrap"
           >
@@ -616,10 +1052,18 @@ export default function FoodManagementTable() {
         </div>
         
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={handleImportExcel} disabled={loading}>
-            <Upload className="w-4 h-4" />
-            {loading ? 'Đang import...' : 'Import Excel'}
-          </Button>
+          {!isPreviewMode && (
+            <Button size="sm" variant="outline" onClick={handleImportExcel} disabled={loading}>
+              <Upload className="w-4 h-4" />
+              {loading ? 'Đang import...' : 'Import Excel'}
+            </Button>
+          )}
+          {!isPreviewMode && (
+            <Button size="sm" variant="ghost" onClick={handleDeleteAllRealData} disabled={loading}>
+              <Trash2 className="w-4 h-4 text-red-500" />
+              Xóa toàn bộ
+            </Button>
+          )}
           {/* Temporarily hidden */}
           {/* <Button size="sm" onClick={handleAddFood}>
             <Plus className="w-4 h-4" />
@@ -633,7 +1077,7 @@ export default function FoodManagementTable() {
         <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full" style={{ tableLayout: 'auto' }}>
           <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
+            {(isPreviewMode ? previewTable : table).getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b bg-muted/30 h-6">
                 {headerGroup.headers.map((header) => (
                   <th
@@ -657,8 +1101,8 @@ export default function FoodManagementTable() {
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+            {(isPreviewMode ? previewTable : table).getRowModel().rows?.length ? (
+              (isPreviewMode ? previewTable : table).getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
                   className="border-b transition-colors hover:bg-muted/20 h-8"
@@ -672,10 +1116,7 @@ export default function FoodManagementTable() {
                         minWidth: cell.column.getSize()
                       }}
                     >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {flexRender(cell.column.columnDef.cell as any, cell.getContext() as any)}
                     </td>
                   ))}
                 </tr>
@@ -698,27 +1139,27 @@ export default function FoodManagementTable() {
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-xs text-muted-foreground">
-          Hiển thị <strong>{table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} đến{' '}
+          Hiển thị <strong>{(isPreviewMode ? previewTable : table).getState().pagination.pageIndex * (isPreviewMode ? previewTable : table).getState().pagination.pageSize + 1} đến{' '}
           {Math.min(
-            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            table.getFilteredRowModel().rows.length
+            ((isPreviewMode ? previewTable : table).getState().pagination.pageIndex + 1) * (isPreviewMode ? previewTable : table).getState().pagination.pageSize,
+            (isPreviewMode ? previewTable : table).getFilteredRowModel().rows.length
           )}{' '} </strong>
-          trong tổng số <strong>{table.getFilteredRowModel().rows.length}</strong> dòng.
+          trong tổng số <strong>{(isPreviewMode ? previewTable : table).getFilteredRowModel().rows.length}</strong> dòng.
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => (isPreviewMode ? previewTable : table).previousPage()}
+            disabled={!(isPreviewMode ? previewTable : table).getCanPreviousPage()}
           >
             Trước
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => (isPreviewMode ? previewTable : table).nextPage()}
+            disabled={!(isPreviewMode ? previewTable : table).getCanNextPage()}
           >
             Sau
           </Button>

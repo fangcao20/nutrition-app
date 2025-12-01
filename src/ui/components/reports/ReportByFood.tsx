@@ -131,23 +131,24 @@ export default function ReportByFood() {
     }
   }, [detailData, selectedFoodId, fromMonthYear, toMonthYear]);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!fromMonthYear || !toMonthYear) return;
-      if (!window.electronAPI) return setData([]);
-      try {
-        const result = await window.electronAPI.report.getFoodSummary({ fromMonthYear, toMonthYear });
-        if (result.success) setData(result.data);
-        else setData([]);
-      } catch (error) {
-        console.error('Error loading food summary', error);
-      }
-    };
-    load();
+  const loadData = useCallback(async () => {
+    if (!fromMonthYear || !toMonthYear) return;
+    if (!window.electronAPI) return setData([]);
+    try {
+      const result = await window.electronAPI.report.getFoodSummary({ fromMonthYear, toMonthYear });
+      if (result.success) setData(result.data);
+      else setData([]);
+    } catch (error) {
+      console.error('Error loading food summary', error);
+    }
     // Clear detail when months change
     setSelectedFoodId(null);
     setDetailData([]);
   }, [fromMonthYear, toMonthYear]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Calculate totals for summary table
   const summaryTotals = useMemo(() => {
@@ -347,22 +348,7 @@ export default function ReportByFood() {
         size: 120,
         filterFn: (row, id, value: string[]) => textFilter(row, id, value),
       },
-      {
-        accessorKey: 'unit',
-        header: ({ column }) => (
-          <div className="flex items-center justify-between px-2 py-1">
-            <SortButton column={column}>Đơn vị tính</SortButton>
-            <DropdownFilter column={column} data={detailData} />
-          </div>
-        ),
-        cell: ({ row }) => (
-          <div className="px-3 h-full flex items-center">
-            {row.getValue('unit')}
-          </div>
-        ),
-        size: 100,
-        filterFn: (row, id, value: string[]) => textFilter(row, id, value),
-      },
+      // `unit` column removed
       {
         accessorKey: 'value',
         header: ({ column }) => (
@@ -947,16 +933,21 @@ function DetailDataTable<T>({
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-md font-medium">Tổng quan</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportSummaryExcel}
-                disabled={!data.length}
-                className="flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Xuất Excel
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={loadData}>
+                  Đồng bộ
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportSummaryExcel}
+                  disabled={!data.length}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Xuất Excel
+                </Button>
+              </div>
             </div>
             <div className="max-w-6xl">
               <DataTable 

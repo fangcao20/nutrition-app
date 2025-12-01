@@ -320,16 +320,7 @@ export default function UsageManagementTable() {
         size: 100,
         filterFn: (row, id, value: string[]) => inputTextFilter(row, id, value),
       },
-      {
-        accessorKey: 'unit',
-        header: () => <div className="px-3 py-2 text-xs font-medium">Đơn vị tính</div>,
-        cell: ({ row }) => (
-          <div className="px-3 h-full flex items-center">
-            {row.getValue('unit')}
-          </div>
-        ),
-        size: 80,
-      },
+      // `unit` column removed
       {
         accessorKey: 'value',
         header: () => <div className="px-3 py-2 text-xs font-medium">Giá trị</div>,
@@ -497,22 +488,7 @@ export default function UsageManagementTable() {
       size: 120,
       filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
-    {
-      accessorKey: 'unit',
-      header: ({ column }) => (
-        <div className="flex items-center justify-between px-2 py-1">
-          <SortButton column={column}>Đơn vị tính</SortButton>
-          <DropdownFilter column={column} data={calculatedData} />
-        </div>
-      ),
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center">
-          {row.getValue('unit')}
-        </div>
-      ),
-      size: 100,
-      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
-    },
+    // `unit` column removed
     {
       accessorKey: 'value',
       header: ({ column }) => (

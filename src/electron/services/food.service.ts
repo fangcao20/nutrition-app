@@ -29,6 +29,182 @@ export class FoodService {
     return this.foodRepository.update(id, data);
   }
 
+  async parseExcelForPreview(filePath: string): Promise<{
+    success: boolean;
+    data: CreateFoodRequest[];
+    errors: Array<{
+      row: number;
+      error: string;
+      foodId?: string;
+      originName?: string;
+      foodName?: string;
+      unit?: string;
+      caloriePerUnit?: string;
+    }>;
+  }> {
+    const errors: Array<{
+      row: number;
+      error: string;
+      foodId?: string;
+      originName?: string;
+      foodName?: string;
+      unit?: string;
+      caloriePerUnit?: string;
+    }> = [];
+    const parsedData: CreateFoodRequest[] = [];
+
+    try {
+      // Check file extension
+      const ext = path.extname(filePath).toLowerCase();
+      if (![".xlsx", ".xls"].includes(ext)) {
+        throw new Error("File không đúng định dạng Excel (.xlsx, .xls)");
+      }
+
+      // Read Excel file
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+
+      // Convert to JSON
+      const data = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+      }) as unknown[][];
+
+      if (data.length < 3) {
+        throw new Error(
+          "File Excel cần có ít nhất 3 dòng (2 dòng tiêu đề + 1 dòng dữ liệu). Vui lòng kiểm tra định dạng file."
+        );
+      }
+
+      // Skip 2 header rows, process from row 3
+      for (let i = 2; i < data.length; i++) {
+        const row = data[i];
+        const rowNum = i + 1;
+
+        try {
+          // Skip empty rows
+          if (!row || row.every((cell) => !cell)) continue;
+
+          // Map Excel columns to food data
+          const foodData = this.mapExcelRowToFood(row);
+
+          if (foodData) {
+            parsedData.push(foodData);
+          }
+        } catch (error) {
+          // Try to parse some basic data for error reporting
+          let foodId = "";
+          let originName = "";
+          let foodName = "";
+          let unit = "";
+          let caloriePerUnit = "";
+
+          try {
+            foodId = this.getCellValue(row[0]) || "";
+            originName = this.getCellValue(row[1]) || "";
+            foodName = this.getCellValue(row[2]) || "";
+            unit = this.getCellValue(row[3]) || "";
+            caloriePerUnit = this.getCellValue(row[4]) || "";
+          } catch {
+            // Ignore parse errors for error data
+          }
+
+          errors.push({
+            row: rowNum,
+            error:
+              error instanceof Error
+                ? this.getUserFriendlyErrorMessage(error)
+                : "Lỗi không xác định",
+            foodId,
+            originName,
+            foodName,
+            unit,
+            caloriePerUnit,
+          });
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        data: parsedData,
+        errors,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        data: [],
+        errors: [
+          {
+            row: 0,
+            error:
+              error instanceof Error
+                ? this.getUserFriendlyErrorMessage(error)
+                : "Lỗi đọc file Excel",
+            foodId: "",
+            originName: "",
+            foodName: "",
+            unit: "",
+            caloriePerUnit: "",
+          },
+        ],
+      };
+    }
+  }
+
+  async importFromData(data: CreateFoodRequest[]): Promise<{
+    success: boolean;
+    imported: number;
+    errors: Array<{
+      row: number;
+      error: string;
+      foodId?: string;
+      originName?: string;
+      foodName?: string;
+      unit?: string;
+      caloriePerUnit?: string;
+    }>;
+  }> {
+    const errors: Array<{
+      row: number;
+      error: string;
+      foodId?: string;
+      originName?: string;
+      foodName?: string;
+      unit?: string;
+      caloriePerUnit?: string;
+    }> = [];
+    let imported = 0;
+
+    for (let i = 0; i < data.length; i++) {
+      const foodData = data[i];
+      const rowNum = i + 1;
+
+      try {
+        await this.createFoodFromImport(foodData);
+        imported++;
+      } catch (error) {
+        errors.push({
+          row: rowNum,
+          error:
+            error instanceof Error
+              ? this.getUserFriendlyErrorMessage(error)
+              : "Lỗi không xác định",
+          foodId: foodData.foodId,
+          originName: foodData.originName,
+          foodName: foodData.foodName,
+          unit: foodData.unit,
+          caloriePerUnit: foodData.caloriePerUnit?.toString(),
+        });
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      imported,
+      errors,
+    };
+  }
+
   async importFromExcel(filePath: string): Promise<{
     success: boolean;
     imported: number;
@@ -376,6 +552,15 @@ export class FoodService {
       return true;
     } catch (error) {
       console.error("Error exporting import errors:", error);
+      return false;
+    }
+  }
+
+  async deleteAllFoods(): Promise<boolean> {
+    try {
+      return this.foodRepository.deleteAll();
+    } catch (error) {
+      console.error("Error deleting all foods:", error);
       return false;
     }
   }

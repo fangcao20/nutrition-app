@@ -263,7 +263,6 @@ export default function CategoryManagementTable() {
       <TabsList>
         <TabsTrigger value="origins" className="text-xs">Nơi lấy mẫu</TabsTrigger>
         <TabsTrigger value="foodNames" className="text-xs">Tên thực phẩm</TabsTrigger>
-        <TabsTrigger value="units" className="text-xs">Đơn vị tính</TabsTrigger>
         <TabsTrigger value="destinations" className="text-xs">Nơi xuất</TabsTrigger>
         <TabsTrigger value="insuranceTypes" className="text-xs">Loại hình bảo hiểm</TabsTrigger>
       </TabsList>
@@ -284,13 +283,7 @@ export default function CategoryManagementTable() {
         />
       </TabsContent>
 
-      <TabsContent value="units">
-        <CategoryTable 
-          data={categories.units} 
-          title="Đơn vị tính" 
-          loading={loading}
-        />
-      </TabsContent>
+      {/* `units` tab removed as requested */}
 
       <TabsContent value="destinations">
         <CategoryTable 

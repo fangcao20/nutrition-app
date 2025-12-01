@@ -276,22 +276,7 @@ export default function HistoryManagementTable() {
       size: 120,
       filterFn: (row, id, value: string[]) => textFilter(row, id, value),
     },
-    {
-      accessorKey: 'unit',
-      header: ({ column }) => (
-        <div className="flex items-center justify-between px-2 py-1">
-          <SortButton column={column}>Đơn vị tính</SortButton>
-          <DropdownFilter column={column} data={historyData} />
-        </div>
-      ),
-      cell: ({ row }) => (
-        <div className="px-3 h-full flex items-center">
-          {row.getValue('unit')}
-        </div>
-      ),
-      size: 100,
-      filterFn: (row, id, value: string[]) => textFilter(row, id, value),
-    },
+    // `unit` column removed
     {
       accessorKey: 'value',
       header: ({ column }) => (
@@ -866,10 +851,15 @@ export default function HistoryManagementTable() {
           </div>
         </div>
         <div className="flex-1" />
-        <Button size="sm" onClick={handleExportExcel} disabled={!historyData.length}>
-          <Download className="w-4 h-4 mr-2" />
-          Xuất Excel
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={loadHistoryData}>
+            Đồng bộ
+          </Button>
+          <Button size="sm" onClick={handleExportExcel} disabled={!historyData.length}>
+            <Download className="w-4 h-4 mr-2" />
+            Xuất Excel
+          </Button>
+        </div>
       </div>
 
       {/* Results Table */}

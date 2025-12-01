@@ -193,6 +193,13 @@ export class FoodRepository {
     const result = stmt.run(...values);
     return result.changes > 0;
   }
+
+  // Delete all food records (use with caution)
+  deleteAll(): boolean {
+    const stmt = this.db.prepare(`DELETE FROM foods`);
+    const result = stmt.run();
+    return result.changes >= 0;
+  }
 }
 
 export default FoodRepository;
